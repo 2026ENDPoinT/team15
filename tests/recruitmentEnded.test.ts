@@ -9,6 +9,7 @@ import {
   eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
+  titleDeadlinePassed,
 } from '../src/domain/dates';
 
 test('수정 제목의 종료 표시를 감지하고 마감 예고나 일정 제목은 유지한다', () => {
@@ -181,6 +182,61 @@ test('원문과 연도·요일이 맞는 지난 강연 후보만 숨기고 미�
   );
   assert.equal(
     eventNoticeEnded(title.replace('2026학년도 ', ''), body, [event], now),
+    false,
+  );
+});
+
+test('제목의 날짜는 연도와 요일을 대조해 지난 공지만 목록에서 제외한다', () => {
+  const title =
+    '2026학년도 2학기 2차 SeoulTech 가족장학생 선발 안내(~11/6(금))';
+  const now = new Date('2026-11-14T00:00:00Z');
+  assert.equal(titleDeadlinePassed(title, null, [], now), true);
+  assert.equal(
+    titleDeadlinePassed(
+      title.replace('2026학년도 ', ''),
+      '2026-11-02',
+      [],
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    titleDeadlinePassed(title.replace('(금)', '(목)'), '2026-11-02', [], now),
+    false,
+  );
+  assert.equal(
+    titleDeadlinePassed(title, null, [], new Date('2026-11-06T14:59:59Z')),
+    false,
+  );
+  assert.equal(
+    titleDeadlinePassed(title, null, [], new Date('2026-11-06T15:00:00Z')),
+    true,
+  );
+  assert.equal(
+    titleDeadlinePassed(
+      '신청 안내(~1/5(화))',
+      '2026-12-26',
+      [],
+      new Date('2026-12-31T00:00:00Z'),
+    ),
+    false,
+  );
+  assert.equal(
+    titleDeadlinePassed(
+      '신청 안내(~1/5(화))',
+      '2026-12-26',
+      [],
+      new Date('2027-01-06T00:00:00Z'),
+    ),
+    true,
+  );
+  assert.equal(
+    titleDeadlinePassed(
+      title,
+      null,
+      normalNoticeFixture.analysis.data.events,
+      now,
+    ),
     false,
   );
 });

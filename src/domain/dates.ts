@@ -1,5 +1,5 @@
 import { normalizeText } from '../../shared/canonicalize';
-import type { ExtractedEvent } from '../../shared/contracts';
+import { dateSchema, type ExtractedEvent } from '../../shared/contracts';
 
 export type ResolvedEvent = Extract<ExtractedEvent, { status: 'resolved' }>;
 const dayMs = 86_400_000;
@@ -283,4 +283,51 @@ export function eventNoticeEnded(
       match[1] === '일월화수목금토'[new Date(event.date).getUTCDay()]
     );
   });
+}
+
+export function titleDeadlinePassed(
+  title: string,
+  publishedDate: string | null,
+  events: ExtractedEvent[],
+  now: Date,
+): boolean {
+  // Do not override a later date reported by the current analysis.
+  const today = new Date(now.getTime() + seoulOffsetMs)
+    .toISOString()
+    .slice(0, 10);
+  if (events.some(({ date }) => date && date >= today)) return false;
+  const text = normalizeText(title).normalize('NFKC');
+  const match = text.match(
+    /\(\s*[~∼]\s*(\d{1,2})\/(\d{1,2})\s*\(([일월화수목금토])(?:요일)?\)\s*\)\s*$/,
+  );
+  if (!match) return false;
+  const [, month, day, weekday] = match;
+  const years = [...new Set(text.match(/20\d{2}(?=\s*(?:학년도|년))/g))];
+  if (years.length > 1 || (!years.length && !publishedDate)) return false;
+  const makeDate = (year: number) =>
+    year + '-' + month!.padStart(2, '0') + '-' + day!.padStart(2, '0');
+  let candidate: string;
+  if (years.length === 1) {
+    candidate = makeDate(Number(years[0]));
+  } else {
+    const year = Number(publishedDate!.slice(0, 4));
+    const reference = Date.parse(publishedDate!);
+    const candidates = [year - 1, year, year + 1]
+      .map(makeDate)
+      .filter((date) => dateSchema.safeParse(date).success)
+      .map((date) => ({
+        date,
+        distance: Math.abs(Date.parse(date) - reference),
+      }))
+      .filter(({ distance }) => distance <= 183 * dayMs)
+      .sort((a, b) => a.distance - b.distance);
+    if (!candidates[0] || candidates[0].distance === candidates[1]?.distance)
+      return false;
+    candidate = candidates[0].date;
+  }
+  return (
+    dateSchema.safeParse(candidate).success &&
+    '일월화수목금토'[new Date(candidate).getUTCDay()] === weekday &&
+    candidate < today
+  );
 }
