@@ -28,8 +28,12 @@ test('맞춤 공지는 한 장씩 처리하고 스크롤 없이 표시하고 상
   await card.getByRole('button', { name: '공지 자세히 보기 ↗' }).click();
   const sheet = page.getByTestId('notice-sheet-content');
   await expect(sheet.getByTestId(/^notice-detail-/)).toBeVisible();
-  for (const label of ['신청 대상', '주요 일정', '신청 방법·제출 서류']) {
+  for (const label of ['주요 일정', '공지 본문']) {
     await expect(sheet.getByText(label, { exact: true })).toBeVisible();
+  }
+  // This unanalysed fixture has no confirmed eligibility or submission items.
+  for (const label of ['신청 대상', '신청 방법·제출 서류']) {
+    await expect(sheet.getByText(label, { exact: true })).toHaveCount(0);
   }
   await expect(sheet.getByText('상세 내용', { exact: true })).toHaveCount(0);
   await expect

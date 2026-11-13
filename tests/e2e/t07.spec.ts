@@ -161,11 +161,14 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     savedCard.getByRole('button', { name: '공지 자세히 보기 ∨', exact: true }),
   ).toHaveAttribute('aria-expanded', 'false');
   const sourceBox = (await sourceButton.boundingBox())!;
-  const discardBox = (await savedCard
-    .getByRole('button', { name: '← 휴지통으로 이동', exact: true })
+  const detailBox = (await savedCard
+    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .boundingBox())!;
-  expect(Math.abs(sourceBox.y - discardBox.y)).toBeLessThan(3);
-  expect(sourceBox.x).toBeGreaterThan(discardBox.x + discardBox.width);
+  expect(Math.abs(sourceBox.y - detailBox.y)).toBeLessThan(3);
+  expect(sourceBox.x).toBeGreaterThan(detailBox.x + detailBox.width);
+  await savedCard.screenshot({
+    path: testInfo.outputPath('t07_collapsed_card.png'),
+  });
   await actualCsTitle
     .locator('..')
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })

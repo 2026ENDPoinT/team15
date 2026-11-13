@@ -1,3 +1,4 @@
+import { noticeCardStyles as cardStyles } from './noticeCardStyles';
 import { NoticeSourceButton } from './NoticeSourceButton';
 import { NoticeProgressSelect } from './NoticeProgressSelect';
 import {
@@ -102,6 +103,7 @@ function Button({
   primary = false,
   disabled = false,
   half = false,
+  cardAction = false,
 }: {
   label: string;
   accessibilityLabel?: string;
@@ -109,6 +111,7 @@ function Button({
   primary?: boolean;
   disabled?: boolean;
   half?: boolean;
+  cardAction?: boolean;
 }) {
   return (
     <Pressable
@@ -117,7 +120,12 @@ function Button({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[s.button, half && { flex: 1 }, primary && s.primary]}
+      style={[
+        s.button,
+        cardAction && cardStyles.button,
+        half && { flex: 1 },
+        primary && s.primary,
+      ]}
     >
       <Text style={[s.buttonText, primary && s.light]}>{label}</Text>
     </Pressable>
@@ -187,57 +195,78 @@ function SwipeCard({
       touchAction={bucket !== 'unseen' ? 'pan-y' : 'none'}
     >
       <Reanimated.View
-        style={[s.card, motion.style, dragging && s.draggingCard]}
+        style={[
+          cardStyles.card,
+          cardStyles.listCard,
+          motion.style,
+          dragging && s.draggingCard,
+        ]}
       >
-        <View style={s.between}>
-          <Text style={[s.muted, { flexShrink: 1 }]}>{notice.org}</Text>
-          <View style={s.noticeStatusTags}>
-            {notice.date && (
-              <Text style={s.tag}>
-                {`${notice.date.slice(5).replace('-', '.')} 마감`}
-              </Text>
-            )}
-            {bucket === 'saved' && progressContent}
-          </View>
+        <View style={cardStyles.listHeader}>
+          <Text style={[cardStyles.muted, { flexShrink: 1 }]}>
+            {notice.org}
+          </Text>
+          {bucket === 'saved' && progressContent}
         </View>
-        <Text style={s.cardTitle}>{notice.title}</Text>
-        {bucket !== 'saved' && (
+        <Text accessibilityRole="header" style={cardStyles.title}>
+          {notice.title}
+        </Text>
+        {(bucket === 'unseen' ||
+          (bucket === 'dismissed' && notice.synthetic)) && (
           <Text style={s.muted}>
             {notice.synthetic
               ? '가상 예시'
               : `실제 공지 · ${notice.analysisLabel}`}
           </Text>
         )}
-        <View style={s.row}>
-          {notice.tags.map((tag) => (
-            <Text key={tag} style={s.tag}>
-              {tag}
+        <Text style={cardStyles.tags}>{notice.tags.join(' · ')}</Text>
+        {!!metadata && <Text style={cardStyles.muted}>{metadata}</Text>}
+        {!!confirmedCardText(notice.summary) && (
+          <Text numberOfLines={2} style={cardStyles.muted}>
+            {confirmedCardText(notice.summary)}
+          </Text>
+        )}
+        <View style={[cardStyles.detailToggle, cardStyles.listToggle]}>
+          <Pressable
+            style={cardStyles.detailButton}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            aria-expanded={expanded}
+            onPress={() => setExpanded((old) => !old)}
+          >
+            <Text style={cardStyles.link}>
+              {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
             </Text>
-          ))}
+          </Pressable>
+          <NoticeSourceButton notice={notice} />
         </View>
-        {!!metadata && <Text style={s.muted}>{metadata}</Text>}
-        <View style={s.row}>
+        <View style={cardStyles.listActions}>
           {bucket === 'saved' ? (
-            <>
-              <Button
-                label="← 휴지통으로 이동"
-                onPress={() => act('discard')}
-              />
-              <View style={{ marginLeft: 'auto' }}>
-                <NoticeSourceButton notice={notice} />
-              </View>
-            </>
+            <Button
+              cardAction
+              label="← 휴지통으로 이동"
+              onPress={() => act('discard')}
+            />
           ) : (
             <>
               {bucket === 'unseen' && (
-                <Button label="← 버리기" onPress={() => act('discard')} />
+                <Button
+                  cardAction
+                  label="← 버리기"
+                  onPress={() => act('discard')}
+                />
               )}
               {bucket === 'dismissed' ? (
-                <Button label="← 삭제" onPress={() => act('delete')} />
+                <Button
+                  cardAction
+                  label="← 삭제"
+                  onPress={() => act('delete')}
+                />
               ) : (
-                <Button label="↕ 보류" onPress={() => act('hold')} />
+                <Button cardAction label="↕ 보류" onPress={() => act('hold')} />
               )}
               <Button
+                cardAction
                 label={bucket === 'dismissed' ? '복구 →' : '선택 →'}
                 primary
                 onPress={() =>
@@ -247,19 +276,9 @@ function SwipeCard({
             </>
           )}
         </View>
-        {bucket !== 'saved' && <NoticeSourceButton notice={notice} />}
-        {expanded && bucket === 'saved' && detailContent}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded }}
-          aria-expanded={expanded}
-          onPress={() => setExpanded((old) => !old)}
-        >
-          <Text style={s.link}>
-            {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
-          </Text>
-        </Pressable>
-        {expanded && bucket !== 'saved' && detailContent}
+        {expanded && (
+          <View style={cardStyles.listDetails}>{detailContent}</View>
+        )}
       </Reanimated.View>
     </GestureDetector>
   );

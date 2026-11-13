@@ -1,3 +1,4 @@
+import { noticeCardStyles } from './noticeCardStyles';
 import { NoticeSourceButton } from './NoticeSourceButton';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
@@ -229,98 +230,53 @@ export default function DiscoverCard({
   );
 }
 
-const styles = StyleSheet.create({
-  detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#dfe5d9',
-  },
-  detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
-  closeButton: {
-    minHeight: 48,
-    minWidth: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailScroll: { flex: 1 },
-  detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
-  deck: { flexShrink: 1, minHeight: 0 },
-  stackCard: {
-    position: 'absolute',
-    top: 24,
-    bottom: 38,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    borderRadius: 20,
-  },
-  stackBack: {
-    left: 20,
-    right: 20,
-    bottom: 28,
-    backgroundColor: '#edf1e8',
-  },
-  stackFront: {
-    left: 10,
-    right: 10,
-    backgroundColor: '#f5f7f1',
-  },
-  remaining: {
-    paddingTop: 28,
-    fontSize: 12,
-    lineHeight: 20,
-    textAlign: 'center',
-    color: '#728174',
-  },
-  card: {
-    flexShrink: 1,
-    minHeight: 0,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    borderRadius: 20,
-    backgroundColor: 'white',
-    overflow: 'hidden',
-  },
-  bodyContent: {
-    flexShrink: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    padding: 14,
-    gap: 6,
-  },
-  title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#213e32' },
-  muted: { fontSize: 12, lineHeight: 19, color: '#728174' },
-  tags: { fontSize: 12, lineHeight: 20, color: '#28634d' },
-  detailToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 18,
-    borderTopWidth: 1,
-    borderTopColor: '#dfe5d9',
-  },
-  detailButton: { minHeight: 44, justifyContent: 'center' },
-  link: { fontSize: 12, color: '#28634d' },
-  actions: {
-    flexDirection: 'row',
-    gap: 7,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-  },
-  button: {
-    flex: 1,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-  },
-  primary: { backgroundColor: '#28634d', borderColor: '#28634d' },
-  light: { color: 'white' },
-});
+const styles = {
+  ...noticeCardStyles,
+  ...StyleSheet.create({
+    detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
+    detailHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      borderBottomWidth: 1,
+      borderBottomColor: '#dfe5d9',
+    },
+    detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
+    closeButton: {
+      minHeight: 48,
+      minWidth: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    detailScroll: { flex: 1 },
+    detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
+    deck: { flexShrink: 1, minHeight: 0 },
+    stackCard: {
+      position: 'absolute',
+      top: 24,
+      bottom: 38,
+      borderWidth: 1,
+      borderColor: '#dfe5d9',
+      borderRadius: 20,
+    },
+    stackBack: {
+      left: 20,
+      right: 20,
+      bottom: 28,
+      backgroundColor: '#edf1e8',
+    },
+    stackFront: {
+      left: 10,
+      right: 10,
+      backgroundColor: '#f5f7f1',
+    },
+    remaining: {
+      paddingTop: 28,
+      fontSize: 12,
+      lineHeight: 20,
+      textAlign: 'center',
+      color: '#728174',
+    },
+  }),
+};
