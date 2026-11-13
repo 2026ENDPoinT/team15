@@ -15,8 +15,8 @@
     "build:web": "expo export --platform web --output-dir dist/web",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --experimental-test-isolation=none tests/*.test.ts",
-    "format": "prettier --write app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md worker docs/campus_notice_t05_handoff.md docs/campus_notice_t07_handoff.md",
-    "format:check": "prettier --check app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md worker docs/campus_notice_t05_handoff.md docs/campus_notice_t07_handoff.md",
+    "format": "prettier --write app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md worker docs/campus_notice_t05_handoff.md docs/campus_notice_t07_handoff.md docs/campus_notice_t09_handoff.md",
+    "format:check": "prettier --check app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md worker docs/campus_notice_t05_handoff.md docs/campus_notice_t07_handoff.md docs/campus_notice_t09_handoff.md",
     "check": "npm run typecheck && npm test && npm run format:check",
     "test:e2e": "npm run build:web && playwright test",
     "collect:smoke": "node --import tsx scripts/collect_smoke.ts",
@@ -31,7 +31,10 @@
     "worker:secrets": "node --import tsx scripts/worker_secrets.ts",
     "worker:access-smoke": "node --import tsx scripts/worker_access_smoke.ts",
     "worker:expiry-smoke": "node --import tsx scripts/worker_expiry_smoke.ts",
-    "sync:smoke": "node --import tsx scripts/t07_smoke.ts"
+    "sync:smoke": "node --import tsx scripts/t07_smoke.ts",
+    "test:t09": "node --import tsx --test --experimental-test-isolation=none tests/t09Integration.test.ts tests/eligibility.test.ts",
+    "t09:candidates": "node --import tsx scripts/t09_candidates.ts",
+    "t09:live-smoke": "node --import tsx scripts/t09_live_smoke.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",

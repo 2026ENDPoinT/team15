@@ -49,7 +49,14 @@ import {
   deadlineReminderLabel,
 } from '../features/demo/noticeDetailPresentation';
 
-import type { Disposition as Bucket } from '../../shared/contracts';
+import type { Disposition as Bucket, Profile } from '../../shared/contracts';
+import { evaluateEligibility } from '../domain/eligibility';
+
+const eligibilityLabels = {
+  basic_match: '기본 조건 일치',
+  mismatch: '지원 조건 불일치',
+  needs_review: '지원 조건 확인 필요',
+};
 function DetailOnOpen({
   onOpen,
   children,
@@ -69,15 +76,19 @@ function Button({
   label,
   onPress,
   primary = false,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   primary?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={[s.button, primary && s.primary]}
     >
@@ -90,14 +101,14 @@ function SwipeCard({
   bucket,
   act,
   detailContent,
-
+  eligibilityLabel,
   onDragging,
 }: {
   notice: Notice;
   bucket: Bucket;
   act: (action: string) => void;
   detailContent: ReactNode;
-
+  eligibilityLabel: string;
   onDragging: (dragging: boolean) => void;
 }) {
   const touchLock = useCardTouchLock(onDragging);
@@ -161,6 +172,7 @@ function SwipeCard({
           ))}
         </View>
         <Text style={s.reason}>{notice.summary}</Text>
+        <Text style={s.muted}>{eligibilityLabel}</Text>
         <Text style={s.muted}>
           {notice.date
             ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
@@ -218,6 +230,7 @@ export default function CampusApp() {
     home,
     syncState,
     syncStatus,
+    reminderWarning,
     refreshNotices,
     analyzeNotice,
     setKeywords,
@@ -412,16 +425,34 @@ export default function CampusApp() {
     return true;
   };
   const [showAll, setShowAll] = useState(false);
+  const profile: Pick<Profile, 'department' | 'grade' | 'enrollment'> = {
+    department: dept,
+    grade: Number(grade.slice(0, 1)) as Profile['grade'],
+    enrollment:
+      status === '재학' ? 'enrolled' : status === '휴학' ? 'leave' : 'other',
+  };
+  const eligibility = Object.fromEntries(
+    notices.map(({ id }) => [
+      id,
+      evaluateEligibility(
+        profile,
+        details[id]?.analysis?.data ?? null,
+        details[id]?.analysisFresh ?? false,
+      ),
+    ]),
+  );
 
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
   const events = home.schedule.filter(
     (event) =>
       event.date.startsWith(prefix) && (!picked || event.date === picked),
   );
+  const [detailUpdating, setDetailUpdating] = useState(false);
   const [detailErrors, setDetailErrors] = useState<Record<string, boolean>>({});
   async function updateDetail(id: string, write: () => Promise<void>) {
     if (changing.current) return;
     changing.current = true;
+    setDetailUpdating(true);
     setDetailErrors((old) => ({ ...old, [id]: false }));
     try {
       await write();
@@ -429,6 +460,7 @@ export default function CampusApp() {
       setDetailErrors((old) => ({ ...old, [id]: true }));
     } finally {
       changing.current = false;
+      setDetailUpdating(false);
     }
   }
   function renderNoticeDetails(notice: Notice) {
@@ -447,7 +479,11 @@ export default function CampusApp() {
           <Text style={s.section}>상세 내용</Text>
           <Text
             style={s.description}
-          >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time} KST` : '일정 미정 · 원문 확인 필요'}\n\n${notice.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : notice.analysisLabel}`}</Text>
+          >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time ? `${notice.time} KST` : '시각 미확인'}` : '일정 미정 · 원문 확인 필요'}\n\n${notice.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : notice.analysisLabel}`}</Text>
+          <Text style={s.reason}>
+            {eligibilityLabels[eligibility[notice.id]!.result]} ·{' '}
+            {eligibility[notice.id]!.reasons.join(' ')}
+          </Text>
           {!notice.synthetic && selectedDetail && (
             <>
               <Button
@@ -494,6 +530,7 @@ export default function CampusApp() {
               {selectedDetail.disposition !== 'saved' && (
                 <Button
                   label="관심 저장"
+                  disabled={detailUpdating}
                   onPress={() =>
                     void updateDetail(notice.id, () =>
                       actions.saveNotice(notice.id),
@@ -506,6 +543,22 @@ export default function CampusApp() {
 
           {selectedDetail?.disposition === 'saved' && (
             <>
+              {selectedDetail.deadlineChanged && (
+                <>
+                  <Text style={s.reason}>
+                    마감이 변경되었어요. 새 일정을 확인해 주세요.
+                  </Text>
+                  <Button
+                    label="마감 변경 확인"
+                    disabled={detailUpdating}
+                    onPress={() =>
+                      void updateDetail(notice.id, () =>
+                        actions.acknowledgeDeadlineChange(notice.id),
+                      )
+                    }
+                  />
+                </>
+              )}
               <Text style={s.section}>신청·제출 체크리스트</Text>
               {selectedChecklist?.updatedChecklist && (
                 <Text style={s.reason}>
@@ -523,7 +576,11 @@ export default function CampusApp() {
                     key={item.id}
                     accessibilityRole="checkbox"
                     accessibilityLabel={item.text}
-                    accessibilityState={{ checked: item.completed }}
+                    accessibilityState={{
+                      checked: item.completed,
+                      disabled: detailUpdating,
+                    }}
+                    disabled={detailUpdating}
                     aria-checked={item.completed}
                     style={[s.button, item.completed && s.checkedItem]}
                     onPress={() =>
@@ -555,6 +612,7 @@ export default function CampusApp() {
                 </Text>
                 <Button
                   label="알림 상태 다시 확인"
+                  disabled={detailUpdating}
                   onPress={() => void updateDetail(notice.id, refreshReminders)}
                 />
               </View>
@@ -569,6 +627,7 @@ export default function CampusApp() {
               {selectedDetail.progress !== 'preparing' && (
                 <Button
                   label="준비 중으로 변경"
+                  disabled={detailUpdating}
                   onPress={() =>
                     void updateDetail(notice.id, () =>
                       actions.setProgress(notice.id, 'preparing'),
@@ -579,6 +638,7 @@ export default function CampusApp() {
               {selectedDetail.progress !== 'applied' && (
                 <Button
                   label="신청 완료로 변경"
+                  disabled={detailUpdating}
                   onPress={() =>
                     void updateDetail(notice.id, () =>
                       actions.setProgress(notice.id, 'applied'),
@@ -615,6 +675,12 @@ export default function CampusApp() {
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
+      {!!reminderWarning &&
+        (page !== 1 || reminderWarning !== syncStatus.message) && (
+          <Text accessibilityLiveRegion="polite" style={s.reason}>
+            {reminderWarning}
+          </Text>
+        )}
       <PageGestureContext.Provider value={pager}>
         <GestureDetector gesture={pager}>
           <View style={s.pageViewport}>
@@ -657,6 +723,10 @@ export default function CampusApp() {
                           details,
                           checklists,
                           detailErrors,
+                          detailUpdating,
+                          dept,
+                          grade,
+                          status,
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
@@ -686,12 +756,13 @@ export default function CampusApp() {
                         (page !== pageRef.current || !held.includes(n.id)) &&
                         (page !== 1 ||
                           showAll ||
-                          keys.some(
-                            (k) =>
-                              n.tags.includes(k) ||
-                              n.title.includes(k) ||
-                              n.summary.includes(k),
-                          )),
+                          (eligibility[n.id]!.result !== 'mismatch' &&
+                            keys.some(
+                              (k) =>
+                                n.tags.includes(k) ||
+                                n.title.includes(k) ||
+                                n.summary.includes(k),
+                            ))),
                     );
                     const nextNotice = visible[0];
                     return (
@@ -796,16 +867,27 @@ export default function CampusApp() {
                                 </Text>
                               )}
                             {__DEV__ && (
-                              <Button
-                                label="T02 수집 검증 열기"
-                                onPress={() => router.push('/dev/collection')}
-                              />
+                              <>
+                                <Button
+                                  label="T02 수집 검증 열기"
+                                  onPress={() => router.push('/dev/collection')}
+                                />
+                                <Button
+                                  label="T09 변경·알림 검증 열기"
+                                  onPress={() => router.push('/dev/t09')}
+                                />
+                              </>
                             )}
 
                             {nextNotice ? (
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                eligibilityLabel={
+                                  eligibilityLabels[
+                                    eligibility[nextNotice.id]!.result
+                                  ]
+                                }
                                 onDragging={onCardDragging}
                                 act={(action) => act(nextNotice.id, action)}
                                 detailContent={renderNoticeDetails(nextNotice)}
@@ -1040,6 +1122,11 @@ export default function CampusApp() {
                                   <SwipeCard
                                     key={n.id}
                                     notice={n}
+                                    eligibilityLabel={
+                                      eligibilityLabels[
+                                        eligibility[n.id]!.result
+                                      ]
+                                    }
                                     bucket={bucket}
                                     onDragging={onCardDragging}
                                     act={(action) => act(n.id, action)}

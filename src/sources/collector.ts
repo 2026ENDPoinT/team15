@@ -78,7 +78,19 @@ export async function collectDetail(
   validateBoardUrl(ref.sourceId, ref.sourceUrl, ref.postId);
   const page = await fetchHtml(ref.sourceUrl, dependencies);
   validateBoardUrl(ref.sourceId, page.responseUrl, ref.postId);
-  const parsed = createBoardAdapter(ref.sourceId).parseDetail(page.html, ref);
+  // Saved records structurally satisfy NoticeRef but carry body/hash fields.
+  // The strict adapter contract accepts only the identity from a list entry.
+  const { id, sourceId, boardId, postId, sourceUrl, title, publishedDate } =
+    ref;
+  const parsed = createBoardAdapter(ref.sourceId).parseDetail(page.html, {
+    id,
+    sourceId,
+    boardId,
+    postId,
+    sourceUrl,
+    title,
+    publishedDate,
+  });
   const fetchedAt = (dependencies.now ?? (() => new Date()))().toISOString();
   const contentHash = await hashNoticeContent(
     {

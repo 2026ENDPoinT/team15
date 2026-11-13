@@ -67,11 +67,16 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     { exact: true },
   );
   await expect(actualCsTitle).toBeVisible();
-  const card = actualCsTitle.locator('..');
+  const card = page.getByTestId('discover-card');
   await card
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await page.getByRole('button', { name: '관심 저장', exact: true }).click();
+  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  await actualCsTitle
+    .locator('..')
+    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .click();
   const cs = verified.results.find(({ envelope }) =>
     envelope.notice_id.startsWith('seoultech_cs:'),
   )!;
@@ -92,20 +97,32 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     path: testInfo.outputPath('t07_real_detail.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
-  const general = page
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  const general = page.getByTestId('discover-card');
+  await expect(
+    general.getByText(
+      '[국제대학] K-로컬 문화 기행 〈팔도유람:부산편〉 로컬 메이트 모집 안내',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await general
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
+    .click();
+  await page.getByRole('button', { name: '관심 저장', exact: true }).click();
+  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  const savedGeneral = page
+    .getByTestId('active-page')
     .getByText(
       '[국제대학] K-로컬 문화 기행 〈팔도유람:부산편〉 로컬 메이트 모집 안내',
       { exact: true },
     )
     .locator('..');
-  await general
-    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
+  await savedGeneral
+    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
-  await page.getByRole('button', { name: '관심 저장', exact: true }).click();
-  await expect(page.getByText(/2026-12-14 시각 미확인/)).toBeVisible();
-  await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  await expect(
+    savedGeneral.getByText(/2026-12-14 시각 미확인/).first(),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: '닫기', exact: true }),
   ).toBeHidden();
@@ -125,7 +142,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
       { exact: true },
     )
     .locator('..')
-    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),

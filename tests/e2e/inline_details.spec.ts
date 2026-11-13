@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('맞춤 공지는 한 장씩 처리하고 상세를 펼쳤을 때만 스크롤한다', async ({
+test('맞춤 공지는 한 장씩 처리하고 확장한 상세를 페이지 스크롤로 읽는다', async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 640 });
@@ -34,8 +34,8 @@ test('맞춤 공지는 한 장씩 처리하고 상세를 펼쳤을 때만 스크
   ).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('discover-details.png') });
   await card.getByRole('button', { name: '접어 두기 ↑' }).click();
-  await expect(body).toHaveCSS('overflow-y', 'hidden');
-  await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(body.getByTestId(/^notice-detail-/)).toHaveCount(0);
+  expect((await card.boundingBox())!.height).toBe(originalHeight);
   await card.getByRole('button', { name: '↕ 보류', exact: true }).click();
   await expect(card.getByText(next, { exact: true })).toBeVisible();
   await expect(card.getByText(scholarship, { exact: true })).toHaveCount(0);
