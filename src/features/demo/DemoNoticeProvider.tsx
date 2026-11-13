@@ -40,11 +40,7 @@ import {
 import type { NotificationSnapshot } from './noticeDetailPresentation';
 
 const dataListeners = new Set<() => Promise<void>>();
-<<<<<<< Updated upstream
-let currentKeywords = ['대회', '장학금'];
 let reminderWarning: string | null = null;
-=======
->>>>>>> Stashed changes
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -214,11 +210,8 @@ async function readState(repository: Repository) {
   );
   return {
     home,
-<<<<<<< Updated upstream
     reminderWarning,
-=======
     profile: (await repository.getProfile()) ?? defaultCampusProfile,
->>>>>>> Stashed changes
     reminders,
     notificationSnapshot,
     notices: entries

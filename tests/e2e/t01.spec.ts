@@ -23,7 +23,6 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByText('2026학년도 2학기 장학금 신청 안내', {
       exact: true,
     });
-  const scholarshipCard = scholarship.locator('..');
   await expect(scholarship).toBeVisible();
   await page
     .getByTestId('discover-card')
@@ -37,21 +36,28 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByTestId('discover-card')
     .getByRole('button', { name: '← 버리기', exact: true })
     .click();
+  await expect(scholarship).toHaveCount(0);
   await navigateTo('휴지통');
-  await expect(scholarship).toBeVisible();
+  const trash = page.getByTestId('active-page');
+  const discardedTitle = trash.getByText('2026학년도 2학기 장학금 신청 안내', {
+    exact: true,
+  });
+  await expect(discardedTitle).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('trash.png'),
     fullPage: true,
   });
-  await scholarshipCard
+  await discardedTitle
+    .locator('..')
     .getByRole('button', { name: '복구 →', exact: true })
     .click();
-  await expect(scholarship).toHaveCount(0);
+  await expect(discardedTitle).toHaveCount(0);
   await navigateTo('맞춤 공지');
   await page
     .getByTestId('discover-card')
     .getByRole('button', { name: '선택 →', exact: true })
     .click();
+  await expect(scholarship).toHaveCount(0);
   await navigateTo('메인');
   await expect(scholarship).toBeVisible();
   const detailCard = page
