@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 test('저장한 공지 상세에서 알림 영역을 숨기고 체크 상태를 유지한다', async ({
   page,
 }, testInfo) => {

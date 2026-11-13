@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 import { extractHwpxText } from '../../worker/src/seoultechHwpx';
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import recorded from '../../fixtures/real/t09/verified.json' with { type: 'json' };
 import { normalizeText } from '../../shared/canonicalize';
 import { analyzeNoticeRequestSchema } from '../../shared/contracts';

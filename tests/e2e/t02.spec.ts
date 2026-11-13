@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('실제 HTML fixture로 Expo 파싱·해시·검증 화면을 연결한다', async ({
   page,

@@ -55,6 +55,51 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+test('초기화는 진행 중 분석을 기다리고 새 요청을 막은 뒤 비운 DB에서 재개한다', async () => {
+  const { db, repository } = await openNodeNoticeRepository();
+  try {
+    await repository.upsertRawNotice(normal);
+    const started = deferred<void>();
+    const response = deferred<AnalysisEnvelope>();
+    let calls = 0;
+    const sync = createNoticeSync({
+      repository,
+      randomUUID,
+      collector: { sha256: nodeSha256 },
+      analyze: async () => {
+        calls++;
+        started.resolve();
+        return response.promise;
+      },
+    });
+    const analysis = sync.analyzeNotice(normal.id);
+    await started.promise;
+    let cleared = false;
+    const reset = sync.withPaused(async () => {
+      await repository.resetAllData();
+      cleared = true;
+    });
+    await sync.analyzeNotice(normal.id);
+    await sync.refreshNotices('manual');
+    assert.equal(cleared, false);
+    assert.equal(calls, 1);
+    response.resolve(normalNoticeFixture.analysis);
+    await Promise.all([analysis, reset]);
+    assert.deepEqual(await repository.listNoticeRecords(), []);
+    await assert.rejects(
+      sync.withPaused(async () => {
+        throw new Error('reset failed');
+      }),
+      /reset failed/,
+    );
+    await repository.upsertRawNotice(normal);
+    await sync.analyzeNotice(normal.id);
+    assert.equal(calls, 2);
+  } finally {
+    db.close();
+  }
+});
+
 test('실제 HTML 두 출처 → HTTP 클라이언트 → SQLite → 체크·일정, 동일 입력은 AI 캐시를 재사용한다', async () => {
   const { db, repository } = await openNodeNoticeRepository();
   try {

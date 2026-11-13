@@ -12,7 +12,8 @@ import {
   randomUUID,
 } from 'expo-crypto';
 import { openDatabaseAsync } from 'expo-sqlite';
-import { AppState, Text } from 'react-native';
+import { AppState, Modal, Text } from 'react-native';
+import { router } from 'expo-router';
 import { normalNoticeFixture } from '../../../fixtures/synthetic/notices';
 import { ActionButton, Screen, styles } from '../../components/ui';
 import { createNoticeRepository } from '../../db/noticeRepository';
@@ -24,6 +25,7 @@ import {
   requestNotificationPermission,
   scheduleTestNotification,
   showDemoNoticeNotification,
+  clearAppNotifications,
 } from '../../platform/deadlineNotifications';
 import { reminderFireAt } from '../../domain/dates';
 import { demoNotice } from './demoNotice';
@@ -46,6 +48,7 @@ import {
 } from '../../domain/campusProfile';
 import type { NotificationSnapshot } from './noticeDetailPresentation';
 import { developerToolsEnabled } from '../verification/developerTools';
+import { resetT09Data } from '../verification/t09Device';
 
 const dataListeners = new Set<() => Promise<void>>();
 const demoEnabled =
@@ -58,6 +61,7 @@ const demoNoticeId = normalNoticeFixture.notice.id.replace(
 const demoTitle = '정보통신대학 장학금 신청 안내';
 const demoBody = '신청 대상: 정보통신대학 재학생\n발표용 가상 공지입니다.';
 let reminderWarning: string | null = null;
+let resettingData = false;
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -123,6 +127,7 @@ async function openDemoRepository() {
       : undefined;
     const reconcile = reconcilePlatform
       ? async () => {
+          if (resettingData) return;
           try {
             await reconcilePlatform();
             reminderWarning = (await repository.listReminders()).some(
@@ -178,7 +183,21 @@ async function openDemoRepository() {
       repository,
       sync,
       actions: createNoticeActions(repository, reconcile),
+      async resetData() {
+        await sync.withPaused(async () => {
+          // Drain already queued reconciliation before cancelling OS reservations.
+          await reconcilePlatform?.();
+          await resetT09Data();
+          await clearAppNotifications();
+          await analysisAccess.clearToken();
+          await repository.resetAllData();
+          profile = defaultCampusProfile;
+          demoFireAt = null;
+          reminderWarning = null;
+        });
+      },
       async saveProfile(next: CampusProfile) {
+        if (resettingData) throw new Error('앱 데이터를 초기화하고 있어요.');
         await repository.saveProfile(next);
         profile = next;
       },
@@ -194,6 +213,8 @@ type DemoServices = Awaited<ReturnType<typeof openDemoRepository>>;
 type Repository = DemoServices['repository'];
 let opening: Promise<DemoServices> | undefined;
 function getRepository() {
+  if (resettingData)
+    return Promise.reject(new Error('앱 데이터를 초기화하고 있어요.'));
   return (opening ??= openDemoRepository().catch((error) => {
     opening = undefined;
     throw error;
@@ -237,11 +258,13 @@ async function readState(repository: Repository) {
         checklist: await repository.getChecklist(record.notice.id),
       })),
   );
+  const savedProfile = await repository.getProfile();
   return {
+    hasCompletedSetup: savedProfile !== null,
     home,
     reminderWarning,
     discoveredKeywords: await repository.listDiscoveredKeywords(),
-    profile: (await repository.getProfile()) ?? defaultCampusProfile,
+    profile: savedProfile ?? defaultCampusProfile,
     reminders,
     notificationSnapshot,
     analysisProgress: getAnalysisProgress(records),
@@ -273,6 +296,7 @@ async function readState(repository: Repository) {
 }
 
 type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
+  resetAppData: (() => Promise<void>) | null;
   syncStatus: SyncStatus;
   hasAnalysisAccess: boolean;
   saveAnalysisToken(token: string): Promise<void>;
@@ -309,6 +333,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
 const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
 
 export function DemoNoticeProvider({ children }: PropsWithChildren) {
+  const [resetting, setResetting] = useState(false);
   const [state, setState] = useState<Awaited<ReturnType<typeof readState>>>();
   const demoRunning = useRef(false);
   const [demoNewNoticeId, setDemoNewNoticeId] = useState<string | null>(null);
@@ -332,11 +357,13 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
     let active = true;
     let unsubscribe: (() => void) | undefined;
     async function reload() {
+      if (resettingData) return;
       const { repository } = await getRepository();
       if (active) await reloadState(repository);
     }
     dataListeners.add(reload);
     function reconcile() {
+      if (resettingData) return;
       void getRepository()
         .then(async ({ actions }) => {
           await actions.reconcileReminders();
@@ -345,6 +372,7 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
         .catch(() => undefined);
     }
     const subscription = AppState.addEventListener('change', (state) => {
+      if (resettingData) return;
       if (state === 'active') {
         reconcile();
         void getRepository()
@@ -470,6 +498,29 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   return (
     <DemoNoticeContext.Provider
       value={{
+        resetAppData: developerToolsEnabled
+          ? async () => {
+              if (resettingData) return;
+              const services = await getRepository();
+              if (resettingData) return;
+              if (demoRunning.current)
+                throw new Error('시연 공지 갱신이 끝난 뒤 다시 시도해 주세요.');
+              resettingData = true;
+              setResetting(true);
+              loadVersion.current++;
+              try {
+                await services.resetData();
+                setHasAnalysisAccess(false);
+                setDemoNewNoticeId(null);
+                setDemoStatus(null);
+                router.replace('/');
+                await reloadState(services.repository);
+              } finally {
+                resettingData = false;
+                setResetting(false);
+              }
+            }
+          : null,
         notice: demoNotice,
         ...state,
         syncStatus,
@@ -610,6 +661,15 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       }}
     >
       {children}
+      <Modal visible={resetting} onRequestClose={() => {}}>
+        <Screen>
+          <Text style={styles.title}>앱 데이터 초기화 중</Text>
+          <Text style={styles.body}>
+            진행 중인 작업을 마치고 데이터를 지우고 있어요. 앱을 닫지 말고
+            기다려 주세요.
+          </Text>
+        </Screen>
+      </Modal>
     </DemoNoticeContext.Provider>
   );
 }

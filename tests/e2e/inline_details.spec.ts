@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('맞춤 공지는 한 장씩 처리하고 스크롤 없이 표시하고 상세는 별도 화면에서 읽는다', async ({
   page,

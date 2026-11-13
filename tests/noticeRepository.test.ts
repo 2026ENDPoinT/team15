@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
+import { defaultCampusProfile } from '../src/domain/campusProfile';
 import {
   changedNoticeFixture,
   normalNoticeFixture,
@@ -62,6 +63,57 @@ function openRepository(db: DatabaseSync) {
     },
   });
 }
+
+test('앱 초기화는 프로필·공지·체크·메모·알림·캐시를 지우고 DB를 다시 사용할 수 있다', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    const repository = await openRepository(db);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.saveProfile(defaultCampusProfile);
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    await repository.saveNotice(notice.id);
+    await repository.setNoticeMemo(notice.id, '초기화 대상');
+    await repository.beginSourceSync(notice.sourceId, new Date().toISOString());
+    await repository.setAnalysisRetryAt(new Date().toISOString());
+    await repository.persistReminder({
+      key: 'reset-test',
+      noticeId: notice.id,
+      desiredFireAt: null,
+      appliedFireAt: null,
+      identifier: null,
+      state: 'synced',
+      error: null,
+    });
+    await repository.resetAllData();
+    for (const table of [
+      'profile',
+      'notices',
+      'user_notices',
+      'checklist_items',
+      'reminders',
+      'discovered_keywords',
+      'sync_state',
+    ]) {
+      assert.equal(
+        db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count,
+        0,
+        table,
+      );
+    }
+    assert.equal(await repository.getProfile(), null);
+    assert.deepEqual(await repository.getSyncState(), {
+      sources: [],
+      analysisRetryAt: null,
+    });
+    await repository.saveProfile(defaultCampusProfile);
+    await repository.upsertRawNotice(notice);
+    assert.deepEqual(await repository.getProfile(), defaultCampusProfile);
+    assert.equal((await repository.listNoticeRecords()).length, 1);
+  } finally {
+    db.close();
+  }
+});
 
 test('마감 변경 확인과 알림 갱신은 최신 분석을 사용하며 취소 실패는 재시도한다', async () => {
   const db = new DatabaseSync(':memory:');

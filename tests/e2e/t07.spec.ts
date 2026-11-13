@@ -1,6 +1,6 @@
 import { pullRefresh } from './pull_refresh';
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { validateAnalysis } from '../../worker/src/validate';
 import verified from '../../fixtures/real/worker/t05_verified.json' with { type: 'json' };
 

@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DemoNoticeProvider } from '../src/features/demo/DemoNoticeProvider';
+import { InitialSetupGate } from '../src/components/InitialSetupGate';
 
 export default function RootLayout() {
   return (
@@ -10,10 +11,12 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <DemoNoticeProvider>
           <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="notice/[id]" />
-          </Stack>
+          <InitialSetupGate>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="notice/[id]" />
+            </Stack>
+          </InitialSetupGate>
         </DemoNoticeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

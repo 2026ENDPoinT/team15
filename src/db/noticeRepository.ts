@@ -47,6 +47,7 @@ export interface SavedNotice {
 }
 
 export interface NoticeRepository {
+  resetAllData(): Promise<void>;
   listDiscoveredKeywords(): Promise<string[]>;
   getProfile(): Promise<CampusProfile | null>;
   saveProfile(profile: CampusProfile): Promise<void>;
@@ -323,6 +324,22 @@ export async function createNoticeRepository(
   }
 
   return {
+    resetAllData() {
+      return enqueue(() =>
+        db.withTransactionAsync(async () => {
+          await db.execAsync(`
+          DELETE FROM reminders;
+          DELETE FROM checklist_items;
+          DELETE FROM user_notices;
+          DELETE FROM notices;
+          DELETE FROM profile;
+          DELETE FROM discovered_keywords;
+          DELETE FROM sync_state;
+          UPDATE sync_control SET analysis_retry_at = NULL;
+        `);
+        }),
+      );
+    },
     listDiscoveredKeywords() {
       return enqueue(async () =>
         (

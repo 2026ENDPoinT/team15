@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('사용자 키워드만 삭제 모드에서 삭제한다', async ({ page }, testInfo) => {
   await page.goto('/');

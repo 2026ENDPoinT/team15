@@ -7,6 +7,21 @@ import type { ReminderPlatform } from '../services/reminderReconciler';
 const channelId = 'application-deadlines';
 const notificationKind = 'application-deadline-v1';
 const testId = 'deadline-notification-test';
+const demoKind = 'team15-demo-notice';
+
+export async function clearAppNotifications(): Promise<void> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const { identifier, content } of scheduled) {
+    if (
+      identifier === testId ||
+      [notificationKind, 't09-verification-v1', demoKind].includes(
+        String(content.data?.kind),
+      )
+    ) {
+      await Notifications.cancelScheduledNotificationAsync(identifier);
+    }
+  }
+}
 // Expo Go owns its notification channels. Use its default channel there.
 const useCustomChannel =
   Platform.OS === 'android' &&
@@ -138,7 +153,11 @@ export async function showDemoNoticeNotification(
   // Use the same host notification channel as the device delivery test.
   if (!(await requestNotificationPermission())) return false;
   await Notifications.scheduleNotificationAsync({
-    content: { title: '관심사에 맞는 새 공지가 올라왔어요', body: title },
+    content: {
+      title: '관심사에 맞는 새 공지가 올라왔어요',
+      body: title,
+      data: { kind: demoKind },
+    },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: 3,

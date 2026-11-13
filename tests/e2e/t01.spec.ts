@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결된다', async ({
   page,
