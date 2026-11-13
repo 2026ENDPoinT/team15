@@ -1,3 +1,4 @@
+import { useCardTouchLock } from './useCardTouchLock';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
@@ -23,6 +24,7 @@ export default function DiscoverCard({
   act: (action: Action) => Promise<boolean>;
   onDragging: (dragging: boolean) => void;
 }) {
+  const touchLock = useCardTouchLock(onDragging);
   const { width, height } = useWindowDimensions();
   const position = useRef(new Animated.ValueXY({ x: 0, y: 60 })).current;
   const [expanded, setExpanded] = useState(false);
@@ -43,13 +45,13 @@ export default function DiscoverCard({
     return () => {
       mounted.current = false;
       position.stopAnimation();
-      onDragging(false);
+      touchLock.release();
     };
   }, [position, onDragging]);
 
   const reset = () => {
     axis.current = null;
-    onDragging(false);
+    touchLock.release();
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
       useNativeDriver: true,
@@ -60,7 +62,7 @@ export default function DiscoverCard({
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
-    onDragging(true);
+    touchLock.startDrag();
     Animated.timing(position, {
       toValue: {
         x: action === 'hold' ? 0 : action === 'select' ? width : -width,
@@ -69,7 +71,13 @@ export default function DiscoverCard({
       duration: 180,
       useNativeDriver: true,
     }).start(async ({ finished }) => {
-      if (!finished || !mounted.current) return;
+      if (!mounted.current) return;
+      if (!finished) {
+        busyRef.current = false;
+        setBusy(false);
+        reset();
+        return;
+      }
       // The repository determines whether to advance. Failed writes keep this card.
       try {
         await actRef.current(action);
@@ -88,17 +96,19 @@ export default function DiscoverCard({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, g) =>
+          touchLock.locked.current &&
           !expanded &&
           !busyRef.current &&
           (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
         onMoveShouldSetPanResponder: (_, g) =>
+          touchLock.locked.current &&
           !expanded &&
           !busyRef.current &&
           (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
         onPanResponderGrant: () => {
           position.stopAnimation();
           axis.current = null;
-          onDragging(true);
+          touchLock.startDrag();
         },
         onPanResponderMove: (_, g) => {
           if (!axis.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) >= 16) {
@@ -128,14 +138,13 @@ export default function DiscoverCard({
       pointerEvents={busy ? 'none' : 'auto'}
       style={[styles.card, { transform: position.getTranslateTransform() }]}
       {...responder.panHandlers}
-      onTouchStart={() => {
-        if (!expanded && !busyRef.current) onDragging(true);
+      onStartShouldSetResponderCapture={() => {
+        if (!expanded && !busyRef.current) touchLock.acquire();
+        return false;
       }}
-      onTouchEnd={() => {
-        if (!busyRef.current) onDragging(false);
-      }}
+      onTouchEnd={touchLock.endTouch}
       onTouchCancel={() => {
-        if (!busyRef.current) onDragging(false);
+        if (!busyRef.current) reset();
       }}
     >
       <View testID="discover-card-body" style={styles.bodyContent}>

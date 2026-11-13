@@ -1,3 +1,4 @@
+import { useCardTouchLock } from './useCardTouchLock';
 import {
   useCallback,
   useEffect,
@@ -87,18 +88,18 @@ function SwipeCard({
 
   onDragging: (dragging: boolean) => void;
 }) {
+  const touchLock = useCardTouchLock(onDragging);
   const position = useRef(new Animated.ValueXY()).current;
   const axis = useRef<'x' | 'y' | null>(null);
   const actRef = useRef(act);
   actRef.current = act;
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  useEffect(() => () => onDragging(false), [onDragging]);
 
   const reset = () => {
     axis.current = null;
     setDragging(false);
-    onDragging(false);
+    touchLock.release();
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
       useNativeDriver: true,
@@ -110,10 +111,12 @@ function SwipeCard({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, g) =>
+          touchLock.locked.current &&
           bucket !== 'saved' &&
           !expanded &&
           (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
         onMoveShouldSetPanResponder: (_, g) =>
+          touchLock.locked.current &&
           bucket !== 'saved' &&
           !expanded &&
           (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
@@ -123,7 +126,7 @@ function SwipeCard({
           position.setValue({ x: 0, y: 0 });
           axis.current = null;
           setDragging(true);
-          onDragging(true);
+          touchLock.startDrag();
         },
         onPanResponderMove: (_, g) => {
           // Ignore initial finger jitter; diagonal drags favor vertical hold.
@@ -162,11 +165,14 @@ function SwipeCard({
         dragging && s.draggingCard,
       ]}
       {...responder.panHandlers}
-      onTouchStart={() => {
-        if (bucket !== 'saved' && !expanded) onDragging(true);
+      onStartShouldSetResponderCapture={() => {
+        if (bucket !== 'saved' && !expanded) touchLock.acquire();
+        return false;
       }}
-      onTouchEnd={() => onDragging(false)}
-      onTouchCancel={() => onDragging(false)}
+      onTouchEnd={touchLock.endTouch}
+      onTouchCancel={() => {
+        reset();
+      }}
     >
       <View style={s.between}>
         <Text style={s.muted}>{notice.org}</Text>
@@ -268,7 +274,6 @@ export default function CampusApp() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [cardDragging, setCardDragging] = useState(false);
   const cardTouchLocked = useRef(false);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -279,16 +284,16 @@ export default function CampusApp() {
   const scrolls = useRef<(ComponentRef<typeof ScrollView> | null)[]>([]);
   const onCardDragging = useCallback((locked: boolean) => {
     cardTouchLocked.current = locked;
-    setCardDragging(locked);
     // Update native scrolling immediately, before a vertical move can be intercepted.
     scrolls.current[pageRef.current]?.setNativeProps({
-      scrollEnabled: !locked,
+      scrollEnabled: !locked && !pageDragging.current && !transitioning.current,
     });
   }, []);
   const { width } = useWindowDimensions();
   const pageOffset = useRef(new Animated.Value(-2 * width)).current;
   const transitioning = useRef(false);
   const pageDragging = useRef(false);
+  const pageAxis = useRef<'x' | 'y' | null>(null);
   const [pageTransitioning, setPageTransitioning] = useState(false);
   const [draggingPage, setDraggingPage] = useState(false);
   useLayoutEffect(() => {
@@ -337,7 +342,7 @@ export default function CampusApp() {
       next === pageRef.current ||
       transitioning.current ||
       pageDragging.current ||
-      cardDragging
+      cardTouchLocked.current
     )
       return;
     settlePage(next);
@@ -345,11 +350,18 @@ export default function CampusApp() {
   const pager = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) =>
-          !transitioning.current &&
-          !cardTouchLocked.current &&
-          Math.abs(g.dx) > 18 &&
-          Math.abs(g.dx) > Math.abs(g.dy) * 1.25,
+        onMoveShouldSetPanResponder: (_, g) => {
+          if (
+            transitioning.current ||
+            cardTouchLocked.current ||
+            g.numberActiveTouches !== 1
+          )
+            return false;
+          if (!pageAxis.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) > 8)
+            pageAxis.current =
+              Math.abs(g.dx) > Math.abs(g.dy) * 1.25 ? 'x' : 'y';
+          return pageAxis.current === 'x' && Math.abs(g.dx) > 18;
+        },
         onPanResponderGrant: () => {
           pageDragging.current = true;
           setDraggingPage(true);
@@ -377,7 +389,7 @@ export default function CampusApp() {
           settlePage(next);
         },
       }),
-    [width, cardDragging, pageOffset],
+    [width, pageOffset],
   );
   const act = async (id: string, action: string) => {
     if (action === 'hold') {
@@ -617,7 +629,13 @@ export default function CampusApp() {
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
-      <View style={s.pageViewport} {...pager.panHandlers}>
+      <View
+        style={s.pageViewport}
+        {...pager.panHandlers}
+        onTouchStart={() => {
+          if (!pageDragging.current) pageAxis.current = null;
+        }}
+      >
         <Animated.View
           pointerEvents={pageTransitioning ? 'none' : 'auto'}
           style={{
@@ -664,7 +682,9 @@ export default function CampusApp() {
                         : 'inactive-page-1'
                     }
                     scrollEnabled={
-                      !cardDragging && !draggingPage && !pageTransitioning
+                      !cardTouchLocked.current &&
+                      !draggingPage &&
+                      !pageTransitioning
                     }
                     ref={(scroll) => {
                       scrolls.current[page] = scroll;
@@ -767,7 +787,9 @@ export default function CampusApp() {
                         : `inactive-page-${page}`
                     }
                     scrollEnabled={
-                      !cardDragging && !draggingPage && !pageTransitioning
+                      !cardTouchLocked.current &&
+                      !draggingPage &&
+                      !pageTransitioning
                     }
                     ref={(scroll) => {
                       scrolls.current[page] = scroll;
@@ -1272,9 +1294,9 @@ export default function CampusApp() {
             aria-selected={page === i}
             accessibilityState={{
               selected: page === i,
-              disabled: pageTransitioning || draggingPage || cardDragging,
+              disabled: pageTransitioning || draggingPage,
             }}
-            disabled={pageTransitioning || draggingPage || cardDragging}
+            disabled={pageTransitioning || draggingPage}
 
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
