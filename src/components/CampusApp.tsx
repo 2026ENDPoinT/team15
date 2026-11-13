@@ -1,3 +1,18 @@
+import { RenderedPage } from './RenderedPage';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing as MotionEasing,
+} from 'react-native-reanimated';
+import {
+  GestureScrollView,
+  PageGestureContext,
+  useCardMotion,
+} from './gestureMotion';
 import { useCardTouchLock } from './useCardTouchLock';
 import {
   useCallback,
@@ -12,12 +27,9 @@ import {
 
 import { router } from 'expo-router';
 import {
-  Animated,
-  Easing,
   Keyboard,
   Modal,
   Linking,
-  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -89,145 +101,103 @@ function SwipeCard({
   onDragging: (dragging: boolean) => void;
 }) {
   const touchLock = useCardTouchLock(onDragging);
-  const position = useRef(new Animated.ValueXY()).current;
-  const axis = useRef<'x' | 'y' | null>(null);
   const actRef = useRef(act);
   actRef.current = act;
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   const reset = () => {
-    axis.current = null;
     setDragging(false);
     touchLock.release();
-    Animated.spring(position, {
-      toValue: { x: 0, y: 0 },
-      useNativeDriver: true,
-      friction: 8,
-      tension: 90,
-    }).start();
+    motion.reset();
   };
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_, g) =>
-          touchLock.locked.current &&
-          bucket !== 'saved' &&
-          !expanded &&
-          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
-        onMoveShouldSetPanResponder: (_, g) =>
-          touchLock.locked.current &&
-          bucket !== 'saved' &&
-          !expanded &&
-          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => {
-          position.stopAnimation();
-          position.setValue({ x: 0, y: 0 });
-          axis.current = null;
-          setDragging(true);
-          touchLock.startDrag();
-        },
-        onPanResponderMove: (_, g) => {
-          // Ignore initial finger jitter; diagonal drags favor vertical hold.
-          if (!axis.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) >= 24)
-            axis.current = Math.abs(g.dx) > Math.abs(g.dy) * 1.5 ? 'x' : 'y';
-          position.setValue({
-            x: axis.current === 'x' ? g.dx : 0,
-            y: axis.current === 'y' ? g.dy : 0,
-          });
-        },
-        onPanResponderTerminate: reset,
-        onPanResponderRelease: (_, g) => {
-          if (axis.current === 'x' && Math.abs(g.dx) >= 56)
-            actRef.current(
-              g.dx > 0
-                ? bucket === 'dismissed'
-                  ? 'restore'
-                  : 'select'
-                : bucket === 'unseen'
-                  ? 'discard'
-                  : 'none',
-            );
-          else if (axis.current === 'y' && Math.abs(g.dy) >= 48)
-            actRef.current('hold');
-          reset();
-        },
-      }),
-    [bucket, expanded, position, onDragging],
+  const motion = useCardMotion(
+    bucket !== 'saved' && !expanded,
+    () => {
+      setDragging(true);
+      touchLock.startDrag();
+    },
+    (dx, dy) => {
+      if (Math.abs(dx) >= 56)
+        actRef.current(
+          dx > 0
+            ? bucket === 'dismissed'
+              ? 'restore'
+              : 'select'
+            : bucket === 'unseen'
+              ? 'discard'
+              : 'none',
+        );
+      else if (Math.abs(dy) >= 48) actRef.current('hold');
+      reset();
+    },
+    reset,
   );
 
   return (
-    <Animated.View
-      style={[
-        s.card,
-        { transform: position.getTranslateTransform() },
-        dragging && s.draggingCard,
-      ]}
-      {...responder.panHandlers}
-      onStartShouldSetResponderCapture={() => {
-        if (bucket !== 'saved' && !expanded) touchLock.acquire();
-        return false;
-      }}
-      onTouchEnd={touchLock.endTouch}
-      onTouchCancel={() => {
-        reset();
-      }}
-    >
-      <View style={s.between}>
-        <Text style={s.muted}>{notice.org}</Text>
-        <Text style={s.tag}>
-          {notice.date
-            ? `${notice.date.slice(5).replace('-', '.')} 마감`
-            : '일정 미정'}
-        </Text>
-      </View>
-      <Text style={s.cardTitle}>{notice.title}</Text>
-      <Text style={s.muted}>
-        {notice.synthetic ? '가상 예시' : `실제 공지 · ${notice.analysisLabel}`}
-      </Text>
-      <View style={s.row}>
-        {notice.tags.map((tag) => (
-          <Text key={tag} style={s.tag}>
-            {tag}
-          </Text>
-        ))}
-      </View>
-      <Text style={s.reason}>{notice.summary}</Text>
-      <Text style={s.muted}>
-        {notice.date
-          ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
-          : '정확한 일정은 원문에서 확인'}
-      </Text>
-      <View style={s.row}>
-        {bucket === 'saved' ? (
-          <Button label="선택 취소" onPress={() => act('unselect')} />
-        ) : (
-          <>
-            {bucket === 'unseen' && (
-              <Button label="← 버리기" onPress={() => act('discard')} />
-            )}
-            <Button label="↕ 보류" onPress={() => act('hold')} />
-            <Button
-              label={bucket === 'dismissed' ? '복구 →' : '선택 →'}
-              primary
-              onPress={() => act(bucket === 'dismissed' ? 'restore' : 'select')}
-            />
-          </>
-        )}
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        aria-expanded={expanded}
-        onPress={() => setExpanded((old) => !old)}
+    <GestureDetector gesture={motion.gesture}>
+      <Reanimated.View
+        style={[s.card, motion.style, dragging && s.draggingCard]}
       >
-        <Text style={s.link}>
-          {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
+        <View style={s.between}>
+          <Text style={s.muted}>{notice.org}</Text>
+          <Text style={s.tag}>
+            {notice.date
+              ? `${notice.date.slice(5).replace('-', '.')} 마감`
+              : '일정 미정'}
+          </Text>
+        </View>
+        <Text style={s.cardTitle}>{notice.title}</Text>
+        <Text style={s.muted}>
+          {notice.synthetic
+            ? '가상 예시'
+            : `실제 공지 · ${notice.analysisLabel}`}
         </Text>
-      </Pressable>
-      {expanded && detailContent}
-    </Animated.View>
+        <View style={s.row}>
+          {notice.tags.map((tag) => (
+            <Text key={tag} style={s.tag}>
+              {tag}
+            </Text>
+          ))}
+        </View>
+        <Text style={s.reason}>{notice.summary}</Text>
+        <Text style={s.muted}>
+          {notice.date
+            ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
+            : '정확한 일정은 원문에서 확인'}
+        </Text>
+        <View style={s.row}>
+          {bucket === 'saved' ? (
+            <Button label="선택 취소" onPress={() => act('unselect')} />
+          ) : (
+            <>
+              {bucket === 'unseen' && (
+                <Button label="← 버리기" onPress={() => act('discard')} />
+              )}
+              <Button label="↕ 보류" onPress={() => act('hold')} />
+              <Button
+                label={bucket === 'dismissed' ? '복구 →' : '선택 →'}
+                primary
+                onPress={() =>
+                  act(bucket === 'dismissed' ? 'restore' : 'select')
+                }
+              />
+            </>
+          )}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          aria-expanded={expanded}
+          onPress={() => setExpanded((old) => !old)}
+        >
+          <Text style={s.link}>
+            {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
+          </Text>
+        </Pressable>
+        {expanded && detailContent}
+      </Reanimated.View>
+    </GestureDetector>
   );
 }
 export default function CampusApp() {
@@ -284,31 +254,27 @@ export default function CampusApp() {
   const scrolls = useRef<(ComponentRef<typeof ScrollView> | null)[]>([]);
   const onCardDragging = useCallback((locked: boolean) => {
     cardTouchLocked.current = locked;
-    // Update native scrolling immediately, before a vertical move can be intercepted.
-    scrolls.current[pageRef.current]?.setNativeProps({
-      scrollEnabled: !locked && !pageDragging.current && !transitioning.current,
-    });
   }, []);
   const { width } = useWindowDimensions();
-  const pageOffset = useRef(new Animated.Value(-2 * width)).current;
+  const pageOffset = useSharedValue(-2 * width);
+  const gesturePage = useSharedValue(2);
+  const motionBusy = useSharedValue(false);
+  const pagePanActive = useSharedValue(false);
   const transitioning = useRef(false);
   const pageDragging = useRef(false);
-  const pageAxis = useRef<'x' | 'y' | null>(null);
   const [pageTransitioning, setPageTransitioning] = useState(false);
-  const [draggingPage, setDraggingPage] = useState(false);
   useLayoutEffect(() => {
-    pageOffset.stopAnimation();
-    pageOffset.setValue(-pageRef.current * width);
+    cancelAnimation(pageOffset);
+    pageOffset.value = -pageRef.current * width;
+    motionBusy.value = false;
     transitioning.current = false;
     pageDragging.current = false;
     setPageTransitioning(false);
-    setDraggingPage(false);
-    return () => pageOffset.stopAnimation();
+    return () => cancelAnimation(pageOffset);
   }, [width, pageOffset]);
   const settlePage = (next: number) => {
     const previous = pageRef.current;
     pageDragging.current = false;
-    setDraggingPage(false);
     transitioning.current = true;
     setPageTransitioning(true);
     if (next !== previous) {
@@ -316,25 +282,34 @@ export default function CampusApp() {
       Keyboard.dismiss();
       scrolls.current[next]?.scrollTo({ y: 0, animated: false });
     }
-    Animated.timing(pageOffset, {
-      toValue: -next * width,
-      duration: 260 + Math.abs(next - previous) * 60,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) return;
+    motionBusy.value = true;
+    const complete = () => {
       if (next !== previous) {
         pageRef.current = next;
+        gesturePage.value = next;
         setPage(next);
         setHeld([]);
         setMessage('');
         scrolls.current[next]?.scrollTo({ y: 0, animated: false });
       }
       transitioning.current = false;
+      motionBusy.value = false;
       setPageTransitioning(false);
-    });
+    };
+    pageOffset.value = withTiming(
+      -next * width,
+      {
+        duration: 260 + Math.abs(next - previous) * 60,
+        easing: MotionEasing.out(MotionEasing.cubic),
+      },
+      (finished) => {
+        if (finished) {
+          gesturePage.value = next;
+          runOnJS(complete)();
+        }
+      },
+    );
   };
-
   const navigate = (next: number) => {
     if (
       next < 0 ||
@@ -347,50 +322,61 @@ export default function CampusApp() {
       return;
     settlePage(next);
   };
+  const startPageDrag = () => {
+    pageDragging.current = true;
+    scrolls.current.forEach((scroll, index) => {
+      if (index !== pageRef.current)
+        scroll?.scrollTo({ y: 0, animated: false });
+    });
+  };
   const pager = useMemo(
     () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => {
-          if (
-            transitioning.current ||
-            cardTouchLocked.current ||
-            g.numberActiveTouches !== 1
-          )
-            return false;
-          if (!pageAxis.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) > 8)
-            pageAxis.current =
-              Math.abs(g.dx) > Math.abs(g.dy) * 1.25 ? 'x' : 'y';
-          return pageAxis.current === 'x' && Math.abs(g.dx) > 18;
-        },
-        onPanResponderGrant: () => {
-          pageDragging.current = true;
-          setDraggingPage(true);
-          pageOffset.stopAnimation();
-          // Incoming pages always start at the top, even during the drag preview.
-          scrolls.current.forEach((scroll, index) => {
-            if (index !== pageRef.current)
-              scroll?.scrollTo({ y: 0, animated: false });
-          });
-        },
-        onPanResponderMove: (_, g) => {
-          pageOffset.setValue(
-            Math.max(-3 * width, Math.min(0, -pageRef.current * width + g.dx)),
-          );
-        },
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderTerminate: () => settlePage(pageRef.current),
-        onPanResponderRelease: (_, g) => {
+      Gesture.Pan()
+        .activeOffsetX([-18, 18])
+        .failOffsetY([-12, 12])
+        .maxPointers(1)
+        .onStart(() => {
+          if (motionBusy.value) return;
+          cancelAnimation(pageOffset);
+          pagePanActive.value = true;
+          runOnJS(startPageDrag)();
+        })
+        .onUpdate((event) => {
+          if (!motionBusy.value)
+            pageOffset.value = Math.max(
+              -3 * width,
+              Math.min(0, -gesturePage.value * width + event.translationX),
+            );
+        })
+        .onEnd((event) => {
+          if (motionBusy.value) return;
           const advance =
-            Math.abs(g.dx) >= width * 0.22 ||
-            (Math.abs(g.dx) > 12 && Math.abs(g.vx) > 0.45 && g.dx * g.vx > 0);
+            Math.abs(event.translationX) >= width * 0.22 ||
+            (Math.abs(event.translationX) > 12 &&
+              Math.abs(event.velocityX) > 450 &&
+              event.translationX * event.velocityX > 0);
           const next = advance
-            ? Math.max(0, Math.min(3, pageRef.current + (g.dx < 0 ? 1 : -1)))
-            : pageRef.current;
-          settlePage(next);
-        },
-      }),
-    [width, pageOffset],
+            ? Math.max(
+                0,
+                Math.min(
+                  3,
+                  gesturePage.value + (event.translationX < 0 ? 1 : -1),
+                ),
+              )
+            : gesturePage.value;
+          runOnJS(settlePage)(next);
+        })
+        .onFinalize((_, success) => {
+          if (!success && pagePanActive.value && !motionBusy.value)
+            runOnJS(settlePage)(gesturePage.value);
+          pagePanActive.value = false;
+        }),
+    [width],
   );
+  const pageStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pageOffset.value }],
+  }));
+
   const act = async (id: string, action: string) => {
     if (action === 'hold') {
       setHeld((old) => [...old, id]);
@@ -629,650 +615,745 @@ export default function CampusApp() {
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
-      <View
-        style={s.pageViewport}
-        {...pager.panHandlers}
-        onTouchStart={() => {
-          if (!pageDragging.current) pageAxis.current = null;
-        }}
-      >
-        <Animated.View
-          pointerEvents={pageTransitioning ? 'none' : 'auto'}
-          style={{
-            flex: 1,
-            flexDirection: 'row',
-            width: width * names.length,
-            transform: [{ translateX: pageOffset }],
-          }}
-        >
-          {names.map((_, page) => {
-            const bucket: Bucket =
-              page === 0 ? 'dismissed' : page === 1 ? 'unseen' : 'saved';
-            const visible = notices.filter(
-              (n) =>
-                buckets[n.id] === bucket &&
-                (page !== pageRef.current || !held.includes(n.id)) &&
-                (page !== 1 ||
-                  showAll ||
-                  keys.some(
-                    (k) =>
-                      n.tags.includes(k) ||
-                      n.title.includes(k) ||
-                      n.summary.includes(k),
-                  )),
-            );
-            const nextNotice = visible[0];
-            return (
-              <View
-                key={page}
-                testID={`campus-page-${page}`}
-                style={{ width, flexShrink: 0 }}
-                pointerEvents={page === pageRef.current ? 'auto' : 'none'}
-                aria-hidden={page !== pageRef.current}
-                accessibilityElementsHidden={page !== pageRef.current}
-                importantForAccessibility={
-                  page === pageRef.current ? 'auto' : 'no-hide-descendants'
-                }
-              >
-                {page === 1 ? (
-                  <ScrollView
-                    testID={
-                      page === pageRef.current
-                        ? 'active-page'
-                        : 'inactive-page-1'
-                    }
-                    scrollEnabled={
-                      !cardTouchLocked.current &&
-                      !draggingPage &&
-                      !pageTransitioning
-                    }
-                    ref={(scroll) => {
-                      scrolls.current[page] = scroll;
-                    }}
-                    keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={s.discoverPage}
-                  >
-                    <View style={s.between}>
-                      <Text accessibilityRole="header" style={s.section}>
-                        맞춤 공지
-                      </Text>
-                      <Text style={s.muted}>남은 공지 {visible.length}개</Text>
-                    </View>
-                    <Button
-                      label={
-                        syncStatus.phase === 'idle'
-                          ? '실제 공지 새로고침'
-                          : '공지 갱신 중…'
-                      }
-                      onPress={() => {
-                        if (syncStatus.phase === 'idle') void refreshNotices();
-                      }}
-                    />
-                    <Button
-                      label={showAll ? '키워드 맞춤 보기' : '전체 공지 보기'}
-                      onPress={() => setShowAll(!showAll)}
-                    />
-                    <Text accessibilityLiveRegion="polite" style={s.muted}>
-                      {syncStatus.phase === 'collecting'
-                        ? '원문 수집 중 · 수집된 공지는 바로 확인할 수 있어요.'
-                        : syncStatus.phase === 'analyzing'
-                          ? 'AI 분석 중 · 공지를 먼저 저장할 수 있어요.'
-                          : '공지 갱신 대기 중'}
-                    </Text>
-                    {syncState.sources.map((source) => (
-                      <Text key={source.sourceId} style={s.muted}>
-                        {source.sourceId === 'seoultech_cs' ? '학과' : '본교'} ·
-                        마지막 전체 수집 성공:{' '}
-                        {source.lastSuccessAt
-                          ? new Date(source.lastSuccessAt).toLocaleString(
-                              'ko-KR',
-                              {
-                                timeZone: 'Asia/Seoul',
-                              },
-                            )
-                          : '아직 없음'}
-                        {source.lastError
-                          ? ` · 일부 수집 실패 (${source.detailFailures}건)`
-                          : ''}
-                      </Text>
-                    ))}
-                    {!!syncStatus.message && (
-                      <Text style={s.reason}>{syncStatus.message}</Text>
-                    )}
-                    {!!syncStatus.analysisRetryAt &&
-                      Date.parse(syncStatus.analysisRetryAt) > Date.now() && (
-                        <Text style={s.muted}>
-                          분석 재시도 가능:{' '}
-                          {new Date(syncStatus.analysisRetryAt).toLocaleString(
-                            'ko-KR',
-                            { timeZone: 'Asia/Seoul' },
-                          )}{' '}
-                          KST
-                        </Text>
-                      )}
-                    {__DEV__ && (
-                      <Button
-                        label="T02 수집 검증 열기"
-                        onPress={() => router.push('/dev/collection')}
-                      />
-                    )}
+      <PageGestureContext.Provider value={pager}>
+        <GestureDetector gesture={pager}>
+          <View style={s.pageViewport}>
+            <Reanimated.View
+              pointerEvents={pageTransitioning ? 'none' : 'auto'}
+              style={[
+                { flex: 1, flexDirection: 'row', width: width * names.length },
+                pageStyle,
+              ]}
+            >
+              {names.map((_, page) => (
+                <RenderedPage
+                  key={page}
+                  inputs={[
+                    width,
+                    today,
+                    page === pageRef.current,
+                    ...(page === 3
+                      ? [
+                          draft,
+                          options,
+                          customOptions,
+                          deletingKeywords,
+                          custom,
+                          dept,
+                          grade,
+                          status,
+                          keys,
+                          setKeywords,
+                          reminders,
+                          notificationSnapshot,
+                          refreshReminders,
+                          testingNotification,
+                          reservationStatus,
+                          testNotification,
+                        ]
+                      : [
+                          notices,
+                          buckets,
+                          details,
+                          checklists,
+                          detailErrors,
+                          reminders,
+                          notificationSnapshot,
+                          refreshReminders,
+                          page === pageRef.current ? held : null,
+                          page === 1 ? keys : null,
+                          page === 1 ? showAll : null,
+                          actions,
+                          analyzeNotice,
+                          page === 2 ? month : null,
+                          page === 2 ? picked : null,
+                          page === 2 ? home : null,
+                          page === 1 ? syncState : null,
+                          page === 1 ? syncStatus : null,
+                          page === 1 ? refreshNotices : null,
+                        ]),
+                  ]}
+                  render={() => {
+                    const bucket: Bucket =
+                      page === 0
+                        ? 'dismissed'
+                        : page === 1
+                          ? 'unseen'
+                          : 'saved';
+                    const visible = notices.filter(
+                      (n) =>
+                        buckets[n.id] === bucket &&
+                        (page !== pageRef.current || !held.includes(n.id)) &&
+                        (page !== 1 ||
+                          showAll ||
+                          keys.some(
+                            (k) =>
+                              n.tags.includes(k) ||
+                              n.title.includes(k) ||
+                              n.summary.includes(k),
+                          )),
+                    );
+                    const nextNotice = visible[0];
+                    return (
+                      <View
+                        key={page}
+                        testID={`campus-page-${page}`}
+                        style={{ width, flexShrink: 0 }}
+                        pointerEvents={
+                          page === pageRef.current ? 'auto' : 'none'
+                        }
+                        aria-hidden={page !== pageRef.current}
+                        accessibilityElementsHidden={page !== pageRef.current}
+                        importantForAccessibility={
+                          page === pageRef.current
+                            ? 'auto'
+                            : 'no-hide-descendants'
+                        }
+                      >
+                        {page === 1 ? (
+                          <GestureScrollView
+                            testID={
+                              page === pageRef.current
+                                ? 'active-page'
+                                : 'inactive-page-1'
+                            }
+                            ref={(scroll) => {
+                              scrolls.current[page] = scroll;
+                            }}
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={s.discoverPage}
+                          >
+                            <View style={s.between}>
+                              <Text
+                                accessibilityRole="header"
+                                style={s.section}
+                              >
+                                맞춤 공지
+                              </Text>
+                              <Text style={s.muted}>
+                                남은 공지 {visible.length}개
+                              </Text>
+                            </View>
+                            <Button
+                              label={
+                                syncStatus.phase === 'idle'
+                                  ? '실제 공지 새로고침'
+                                  : '공지 갱신 중…'
+                              }
+                              onPress={() => {
+                                if (syncStatus.phase === 'idle')
+                                  void refreshNotices();
+                              }}
+                            />
+                            <Button
+                              label={
+                                showAll ? '키워드 맞춤 보기' : '전체 공지 보기'
+                              }
+                              onPress={() => setShowAll(!showAll)}
+                            />
+                            <Text
+                              accessibilityLiveRegion="polite"
+                              style={s.muted}
+                            >
+                              {syncStatus.phase === 'collecting'
+                                ? '원문 수집 중 · 수집된 공지는 바로 확인할 수 있어요.'
+                                : syncStatus.phase === 'analyzing'
+                                  ? 'AI 분석 중 · 공지를 먼저 저장할 수 있어요.'
+                                  : '공지 갱신 대기 중'}
+                            </Text>
+                            {syncState.sources.map((source) => (
+                              <Text key={source.sourceId} style={s.muted}>
+                                {source.sourceId === 'seoultech_cs'
+                                  ? '학과'
+                                  : '본교'}{' '}
+                                · 마지막 전체 수집 성공:{' '}
+                                {source.lastSuccessAt
+                                  ? new Date(
+                                      source.lastSuccessAt,
+                                    ).toLocaleString('ko-KR', {
+                                      timeZone: 'Asia/Seoul',
+                                    })
+                                  : '아직 없음'}
+                                {source.lastError
+                                  ? ` · 일부 수집 실패 (${source.detailFailures}건)`
+                                  : ''}
+                              </Text>
+                            ))}
+                            {!!syncStatus.message && (
+                              <Text style={s.reason}>{syncStatus.message}</Text>
+                            )}
+                            {!!syncStatus.analysisRetryAt &&
+                              Date.parse(syncStatus.analysisRetryAt) >
+                                Date.now() && (
+                                <Text style={s.muted}>
+                                  분석 재시도 가능:{' '}
+                                  {new Date(
+                                    syncStatus.analysisRetryAt,
+                                  ).toLocaleString('ko-KR', {
+                                    timeZone: 'Asia/Seoul',
+                                  })}{' '}
+                                  KST
+                                </Text>
+                              )}
+                            {__DEV__ && (
+                              <Button
+                                label="T02 수집 검증 열기"
+                                onPress={() => router.push('/dev/collection')}
+                              />
+                            )}
 
-                    {nextNotice ? (
-                      <DiscoverCard
-                        key={nextNotice.id}
-                        notice={nextNotice}
-                        onDragging={onCardDragging}
-                        act={(action) => act(nextNotice.id, action)}
-                        detailContent={renderNoticeDetails(nextNotice)}
-                      />
-                    ) : (
-                      <View style={s.card}>
-                        <Text style={s.description}>
-                          {held.length
-                            ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                            : '선호 키워드에 맞는 새 공지가 없어요.'}
-                        </Text>
-                        <Button
-                          label="키워드 수정하기 →"
-                          onPress={() => navigate(3)}
-                        />
-                      </View>
-                    )}
-                  </ScrollView>
-                ) : (
-                  <ScrollView
-                    testID={
-                      page === pageRef.current
-                        ? 'active-page'
-                        : `inactive-page-${page}`
-                    }
-                    scrollEnabled={
-                      !cardTouchLocked.current &&
-                      !draggingPage &&
-                      !pageTransitioning
-                    }
-                    ref={(scroll) => {
-                      scrolls.current[page] = scroll;
-                    }}
-                    contentContainerStyle={s.content}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    <Text style={s.eyebrow}>
-                      {
-                        [
-                          'A / TRASH',
-                          'B / DISCOVER',
-                          'C / HOME',
-                          'D / SETTINGS',
-                        ][page]
-                      }
-                    </Text>
-                    <Text accessibilityRole="header" style={s.title}>
-                      {
-                        [
-                          '잠시 내려놓은 공지',
-                          '나에게 맞는 새로운 기회',
-                          '선택한 기회를 한눈에',
-                          '나를 위한 공지 설정',
-                        ][page]
-                      }
-                    </Text>
-                    <Text style={s.description}>
-                      {
-                        [
-                          '버린 공지를 확인하고 다시 복구할 수 있어요.',
-                          '선호 키워드에 맞는 공지를 살펴보고 선택하세요.',
-                          '캘린더와 선택한 공지를 함께 확인하세요.',
-                          '내 정보와 관심 키워드를 설정하세요.',
-                        ][page]
-                      }
-                    </Text>
-                    {page === 2 && (
-                      <View style={s.card}>
-                        <View style={s.between}>
-                          <Button
-                            label="이전 달"
-                            onPress={() => {
-                              setMonth(
-                                new Date(
-                                  month.getFullYear(),
-                                  month.getMonth() - 1,
-                                  1,
-                                ),
-                              );
-                              setPicked(null);
+                            {nextNotice ? (
+                              <DiscoverCard
+                                key={nextNotice.id}
+                                notice={nextNotice}
+                                onDragging={onCardDragging}
+                                act={(action) => act(nextNotice.id, action)}
+                                detailContent={renderNoticeDetails(nextNotice)}
+                              />
+                            ) : (
+                              <View style={s.card}>
+                                <Text style={s.description}>
+                                  {held.length
+                                    ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
+                                    : '선호 키워드에 맞는 새 공지가 없어요.'}
+                                </Text>
+                                <Button
+                                  label="키워드 수정하기 →"
+                                  onPress={() => navigate(3)}
+                                />
+                              </View>
+                            )}
+                          </GestureScrollView>
+                        ) : (
+                          <GestureScrollView
+                            testID={
+                              page === pageRef.current
+                                ? 'active-page'
+                                : `inactive-page-${page}`
+                            }
+                            ref={(scroll) => {
+                              scrolls.current[page] = scroll;
                             }}
-                          />
-                          <Text style={s.cardTitle}>
-                            {month.getFullYear()}년 {month.getMonth() + 1}월
-                          </Text>
-                          <Button
-                            label="다음 달"
-                            onPress={() => {
-                              setMonth(
-                                new Date(
-                                  month.getFullYear(),
-                                  month.getMonth() + 1,
-                                  1,
-                                ),
-                              );
-                              setPicked(null);
-                            }}
-                          />
-                        </View>
-                        <View>
-                          <View style={s.calendarRow}>
-                            {['일', '월', '화', '수', '목', '금', '토'].map(
-                              (d, weekday) => (
-                                <View key={d} style={s.cell}>
-                                  <Text
-                                    style={[
-                                      s.muted,
-                                      weekday === 0 && s.sunday,
-                                      weekday === 6 && s.saturday,
-                                    ]}
-                                  >
-                                    {d}
+                            contentContainerStyle={s.content}
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            <Text style={s.eyebrow}>
+                              {
+                                [
+                                  'A / TRASH',
+                                  'B / DISCOVER',
+                                  'C / HOME',
+                                  'D / SETTINGS',
+                                ][page]
+                              }
+                            </Text>
+                            <Text accessibilityRole="header" style={s.title}>
+                              {
+                                [
+                                  '잠시 내려놓은 공지',
+                                  '나에게 맞는 새로운 기회',
+                                  '선택한 기회를 한눈에',
+                                  '나를 위한 공지 설정',
+                                ][page]
+                              }
+                            </Text>
+                            <Text style={s.description}>
+                              {
+                                [
+                                  '버린 공지를 확인하고 다시 복구할 수 있어요.',
+                                  '선호 키워드에 맞는 공지를 살펴보고 선택하세요.',
+                                  '캘린더와 선택한 공지를 함께 확인하세요.',
+                                  '내 정보와 관심 키워드를 설정하세요.',
+                                ][page]
+                              }
+                            </Text>
+                            {page === 2 && (
+                              <View style={s.card}>
+                                <View style={s.between}>
+                                  <Button
+                                    label="이전 달"
+                                    onPress={() => {
+                                      setMonth(
+                                        new Date(
+                                          month.getFullYear(),
+                                          month.getMonth() - 1,
+                                          1,
+                                        ),
+                                      );
+                                      setPicked(null);
+                                    }}
+                                  />
+                                  <Text style={s.cardTitle}>
+                                    {month.getFullYear()}년{' '}
+                                    {month.getMonth() + 1}월
+                                  </Text>
+                                  <Button
+                                    label="다음 달"
+                                    onPress={() => {
+                                      setMonth(
+                                        new Date(
+                                          month.getFullYear(),
+                                          month.getMonth() + 1,
+                                          1,
+                                        ),
+                                      );
+                                      setPicked(null);
+                                    }}
+                                  />
+                                </View>
+                                <View>
+                                  <View style={s.calendarRow}>
+                                    {[
+                                      '일',
+                                      '월',
+                                      '화',
+                                      '수',
+                                      '목',
+                                      '금',
+                                      '토',
+                                    ].map((d, weekday) => (
+                                      <View key={d} style={s.cell}>
+                                        <Text
+                                          style={[
+                                            s.muted,
+                                            weekday === 0 && s.sunday,
+                                            weekday === 6 && s.saturday,
+                                          ]}
+                                        >
+                                          {d}
+                                        </Text>
+                                      </View>
+                                    ))}
+                                  </View>
+                                  {Array.from(
+                                    {
+                                      length: Math.ceil(
+                                        (month.getDay() +
+                                          new Date(
+                                            month.getFullYear(),
+                                            month.getMonth() + 1,
+                                            0,
+                                          ).getDate()) /
+                                          7,
+                                      ),
+                                    },
+                                    (_, week) => (
+                                      <View key={week} style={s.calendarRow}>
+                                        {Array.from(
+                                          { length: 7 },
+                                          (_, weekday) => {
+                                            const i =
+                                              week * 7 +
+                                              weekday -
+                                              month.getDay();
+                                            const days = new Date(
+                                              month.getFullYear(),
+                                              month.getMonth() + 1,
+                                              0,
+                                            ).getDate();
+                                            if (i < 0 || i >= days)
+                                              return (
+                                                <View
+                                                  key={weekday}
+                                                  style={s.cell}
+                                                />
+                                              );
+                                            const date =
+                                              prefix +
+                                              String(i + 1).padStart(2, '0');
+
+                                            const hasEvent = home.schedule.some(
+                                              (event) => event.date === date,
+                                            );
+                                            return (
+                                              <Pressable
+                                                key={date}
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`${date}, 일정 ${hasEvent ? 1 : 0}개`}
+                                                accessibilityState={{
+                                                  selected: picked === date,
+                                                }}
+                                                onPress={() =>
+                                                  setPicked(
+                                                    picked === date
+                                                      ? null
+                                                      : date,
+                                                  )
+                                                }
+                                                style={[
+                                                  s.cell,
+                                                  picked === date && s.primary,
+                                                  date === today && s.today,
+                                                ]}
+                                              >
+                                                <Text
+                                                  style={[
+                                                    picked === date
+                                                      ? s.light
+                                                      : s.buttonText,
+                                                    weekday === 0 && s.sunday,
+                                                    weekday === 6 && s.saturday,
+                                                  ]}
+                                                >
+                                                  {i + 1}
+                                                </Text>
+                                                <Text
+                                                  style={[
+                                                    s.dot,
+                                                    picked === date && s.light,
+                                                  ]}
+                                                >
+                                                  {hasEvent ? '•' : ' '}
+                                                </Text>
+                                              </Pressable>
+                                            );
+                                          },
+                                        )}
+                                      </View>
+                                    ),
+                                  )}
+                                </View>
+                                <Text style={s.reason}>
+                                  {events.length
+                                    ? events
+                                        .map(
+                                          (event) =>
+                                            `${event.date} ${event.time ?? '시각 미확인'} · ${event.label} · ${event.title}`,
+                                        )
+                                        .join('\n')
+                                    : '선택한 일정이 없어요.'}
+                                </Text>
+                              </View>
+                            )}
+                            {page !== 3 ? (
+                              <>
+                                <View style={s.between}>
+                                  <Text style={s.section}>
+                                    {names[page]}
+                                    {page === 2 ? ' · 선택한 공지' : ''}
+                                  </Text>
+                                  <Text style={s.muted}>
+                                    {visible.length}개
                                   </Text>
                                 </View>
-                              ),
-                            )}
-                          </View>
-                          {Array.from(
-                            {
-                              length: Math.ceil(
-                                (month.getDay() +
-                                  new Date(
-                                    month.getFullYear(),
-                                    month.getMonth() + 1,
-                                    0,
-                                  ).getDate()) /
-                                  7,
-                              ),
-                            },
-                            (_, week) => (
-                              <View key={week} style={s.calendarRow}>
-                                {Array.from({ length: 7 }, (_, weekday) => {
-                                  const i = week * 7 + weekday - month.getDay();
-                                  const days = new Date(
-                                    month.getFullYear(),
-                                    month.getMonth() + 1,
-                                    0,
-                                  ).getDate();
-                                  if (i < 0 || i >= days)
-                                    return (
-                                      <View key={weekday} style={s.cell} />
-                                    );
-                                  const date =
-                                    prefix + String(i + 1).padStart(2, '0');
-
-                                  const hasEvent = home.schedule.some(
-                                    (event) => event.date === date,
-                                  );
-                                  return (
-                                    <Pressable
-                                      key={date}
-                                      accessibilityRole="button"
-                                      accessibilityLabel={`${date}, 일정 ${hasEvent ? 1 : 0}개`}
-                                      accessibilityState={{
-                                        selected: picked === date,
-                                      }}
-                                      onPress={() =>
-                                        setPicked(picked === date ? null : date)
-                                      }
-                                      style={[
-                                        s.cell,
-                                        picked === date && s.primary,
-                                        date === today && s.today,
-                                      ]}
-                                    >
-                                      <Text
-                                        style={[
-                                          picked === date
-                                            ? s.light
-                                            : s.buttonText,
-                                          weekday === 0 && s.sunday,
-                                          weekday === 6 && s.saturday,
-                                        ]}
-                                      >
-                                        {i + 1}
-                                      </Text>
-                                      <Text
-                                        style={[
-                                          s.dot,
-                                          picked === date && s.light,
-                                        ]}
-                                      >
-                                        {hasEvent ? '•' : ' '}
-                                      </Text>
-                                    </Pressable>
-                                  );
-                                })}
-                              </View>
-                            ),
-                          )}
-                        </View>
-                        <Text style={s.reason}>
-                          {events.length
-                            ? events
-                                .map(
-                                  (event) =>
-                                    `${event.date} ${event.time ?? '시각 미확인'} · ${event.label} · ${event.title}`,
-                                )
-                                .join('\n')
-                            : '선택한 일정이 없어요.'}
-                        </Text>
-                      </View>
-                    )}
-                    {page !== 3 ? (
-                      <>
-                        <View style={s.between}>
-                          <Text style={s.section}>
-                            {names[page]}
-                            {page === 2 ? ' · 선택한 공지' : ''}
-                          </Text>
-                          <Text style={s.muted}>{visible.length}개</Text>
-                        </View>
-                        {visible.map((n) => (
-                          <SwipeCard
-                            key={n.id}
-                            notice={n}
-                            bucket={bucket}
-                            onDragging={onCardDragging}
-                            act={(action) => act(n.id, action)}
-                            detailContent={renderNoticeDetails(n)}
-                          />
-                        ))}
-                        {!visible.length && (
-                          <View style={s.card}>
-                            <Text style={s.description}>
-                              {held.length
-                                ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                                : page === 0
-                                  ? '휴지통이 비어 있어요.'
-                                  : page === 1
-                                    ? '선호 키워드에 맞는 새 공지가 없어요.'
-                                    : '아직 선택한 공지가 없어요.'}
-                            </Text>
-                            {page !== 0 && (
-                              <Button
-                                label={
-                                  page === 1
-                                    ? '키워드 설정하기 →'
-                                    : '맞춤 공지 찾아보기 →'
-                                }
-                                onPress={() => navigate(page === 1 ? 3 : 1)}
-                              />
-                            )}
-                          </View>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <AnalysisSettings />
-                        <View style={s.card}>
-                          <Text style={s.section}>내 정보</Text>
-                          <Text style={s.muted}>학과</Text>
-                          <TextInput
-                            accessibilityLabel="학과"
-                            value={dept}
-                            onChangeText={setDept}
-                            style={s.input}
-                          />
-                          <Text style={s.muted}>학년</Text>
-                          <View style={s.row}>
-                            {['1학년', '2학년', '3학년', '4학년'].map((g) => (
-                              <Button
-                                key={g}
-                                label={g}
-                                primary={grade === g}
-                                onPress={() => setGrade(g)}
-                              />
-                            ))}
-                          </View>
-                          <Text style={s.muted}>학적 상태</Text>
-                          <View style={s.row}>
-                            {['재학', '휴학', '졸업'].map((g) => (
-                              <Button
-                                key={g}
-                                label={g}
-                                primary={status === g}
-                                onPress={() => setStatus(g)}
-                              />
-                            ))}
-                          </View>
-                        </View>
-                        <View style={s.card}>
-                          <Text style={s.section}>선호 키워드</Text>
-                          <View style={s.row}>
-                            {options.map((k) => (
-                              <Pressable
-                                key={k}
-                                accessibilityRole="button"
-                                accessibilityLabel={k}
-                                accessibilityState={{
-                                  selected: draft.includes(k),
-                                }}
-                                disabled={deletingKeywords}
-                                onPress={() =>
-                                  setDraft((old) =>
-                                    old.includes(k)
-                                      ? old.filter((v) => v !== k)
-                                      : [...old, k],
-                                  )
-                                }
-                                style={[
-                                  s.button,
-                                  draft.includes(k) && s.primary,
-                                ]}
-                              >
-                                <Text
-                                  style={
-                                    draft.includes(k) ? s.light : s.buttonText
-                                  }
-                                >
-                                  {k}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                          {customOptions.length > 0 && (
-                            <View style={s.customKeywords}>
-                              <Text style={s.muted}>직접 추가한 키워드</Text>
-                              <View style={s.row}>
-                                {customOptions.map((k) => (
-                                  <Pressable
-                                    key={k}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={
-                                      deletingKeywords ? `${k} 삭제` : k
-                                    }
-                                    accessibilityState={{
-                                      selected: draft.includes(k),
-                                    }}
-                                    onPress={() => {
-                                      if (deletingKeywords) {
-                                        setCustomOptions((old) =>
-                                          old.filter((v) => v !== k),
-                                        );
-                                        setDraft((old) =>
-                                          old.filter((v) => v !== k),
-                                        );
-                                        const nextKeys = keys.filter(
-                                          (v) => v !== k,
-                                        );
-                                        setKeys(nextKeys);
-                                        setKeywords(nextKeys);
-                                      } else {
-                                        setDraft((old) =>
-                                          old.includes(k)
-                                            ? old.filter((v) => v !== k)
-                                            : [...old, k],
-                                        );
-                                      }
-                                    }}
-                                    style={[
-                                      s.button,
-                                      draft.includes(k) && s.primary,
-                                      deletingKeywords && s.deletableKeyword,
-                                    ]}
-                                  >
-                                    <Text
-                                      style={
-                                        draft.includes(k)
-                                          ? s.light
-                                          : s.buttonText
-                                      }
-                                    >
-                                      {k}
-                                    </Text>
-                                  </Pressable>
+                                {visible.map((n) => (
+                                  <SwipeCard
+                                    key={n.id}
+                                    notice={n}
+                                    bucket={bucket}
+                                    onDragging={onCardDragging}
+                                    act={(action) => act(n.id, action)}
+                                    detailContent={renderNoticeDetails(n)}
+                                  />
                                 ))}
-                              </View>
-                            </View>
-                          )}
-                          {deletingKeywords && (
-                            <Text style={s.deleteHint}>
-                              빨간 테두리의 키워드를 누르면 삭제됩니다.
-                            </Text>
-                          )}
-                          <TextInput
-                            editable={!deletingKeywords}
-                            accessibilityLabel="직접 키워드 입력"
-                            placeholder="직접 키워드 입력"
-                            value={custom}
-                            onChangeText={setCustom}
-                            onSubmitEditing={addKey}
-                            style={s.input}
-                          />
-                          <View style={s.keywordActions}>
-                            <View style={{ flex: 7 }}>
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="키워드 추가"
-                                disabled={deletingKeywords}
-                                onPress={addKey}
-                                style={[
-                                  s.button,
-                                  deletingKeywords && { opacity: 0.4 },
-                                ]}
-                              >
-                                <Text style={s.buttonText}>키워드 추가</Text>
-                              </Pressable>
-                            </View>
-                            <View style={{ flex: 3 }}>
-                              <Button
-                                label={
-                                  deletingKeywords ? '삭제 취소' : '키워드 삭제'
-                                }
-                                onPress={() =>
-                                  setDeletingKeywords((old) => !old)
-                                }
-                              />
-                            </View>
-                          </View>
-                        </View>
-                        <Button
-                          label="설정 저장"
-                          primary
-                          onPress={() => {
-                            if (!draft.length) {
-                              setMessage(
-                                '선호 키워드를 하나 이상 선택해주세요.',
-                              );
-                              return;
-                            }
-                            setKeys([...draft]);
-                            setKeywords([...draft]);
-                            setMessage(
-                              '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
-                            );
-                          }}
-                        />
-                        {testNotification && (
-                          <Button
-                            label={
-                              testingNotification
-                                ? '알림 예약 중…'
-                                : '10초 뒤 테스트 알림'
-                            }
-                            onPress={async () => {
-                              if (testingNotification) return;
-                              setTestingNotification(true);
-                              try {
-                                const scheduled = await testNotification();
-                                setMessage(
-                                  scheduled
-                                    ? '테스트 알림을 예약했어요.'
-                                    : '기기 설정에서 알림을 허용해 주세요.',
-                                );
-                              } catch (error) {
-                                setMessage(
-                                  error instanceof Error
-                                    ? error.message
-                                    : '테스트 알림을 예약하지 못했어요.',
-                                );
-                              } finally {
-                                setTestingNotification(false);
-                              }
-                            }}
-                          />
-                        )}
-                        {reservationStatus && (
-                          <View style={s.card}>
-                            <Text style={s.section}>
-                              가상 공지 마감 알림 검증
-                            </Text>
+                                {!visible.length && (
+                                  <View style={s.card}>
+                                    <Text style={s.description}>
+                                      {held.length
+                                        ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
+                                        : page === 0
+                                          ? '휴지통이 비어 있어요.'
+                                          : page === 1
+                                            ? '선호 키워드에 맞는 새 공지가 없어요.'
+                                            : '아직 선택한 공지가 없어요.'}
+                                    </Text>
+                                    {page !== 0 && (
+                                      <Button
+                                        label={
+                                          page === 1
+                                            ? '키워드 설정하기 →'
+                                            : '맞춤 공지 찾아보기 →'
+                                        }
+                                        onPress={() =>
+                                          navigate(page === 1 ? 3 : 1)
+                                        }
+                                      />
+                                    )}
+                                  </View>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <AnalysisSettings />
+                                <View style={s.card}>
+                                  <Text style={s.section}>내 정보</Text>
+                                  <Text style={s.muted}>학과</Text>
+                                  <TextInput
+                                    accessibilityLabel="학과"
+                                    value={dept}
+                                    onChangeText={setDept}
+                                    style={s.input}
+                                  />
+                                  <Text style={s.muted}>학년</Text>
+                                  <View style={s.row}>
+                                    {['1학년', '2학년', '3학년', '4학년'].map(
+                                      (g) => (
+                                        <Button
+                                          key={g}
+                                          label={g}
+                                          primary={grade === g}
+                                          onPress={() => setGrade(g)}
+                                        />
+                                      ),
+                                    )}
+                                  </View>
+                                  <Text style={s.muted}>학적 상태</Text>
+                                  <View style={s.row}>
+                                    {['재학', '휴학', '졸업'].map((g) => (
+                                      <Button
+                                        key={g}
+                                        label={g}
+                                        primary={status === g}
+                                        onPress={() => setStatus(g)}
+                                      />
+                                    ))}
+                                  </View>
+                                </View>
+                                <View style={s.card}>
+                                  <Text style={s.section}>선호 키워드</Text>
+                                  <View style={s.row}>
+                                    {options.map((k) => (
+                                      <Pressable
+                                        key={k}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={k}
+                                        accessibilityState={{
+                                          selected: draft.includes(k),
+                                        }}
+                                        disabled={deletingKeywords}
+                                        onPress={() =>
+                                          setDraft((old) =>
+                                            old.includes(k)
+                                              ? old.filter((v) => v !== k)
+                                              : [...old, k],
+                                          )
+                                        }
+                                        style={[
+                                          s.button,
+                                          draft.includes(k) && s.primary,
+                                        ]}
+                                      >
+                                        <Text
+                                          style={
+                                            draft.includes(k)
+                                              ? s.light
+                                              : s.buttonText
+                                          }
+                                        >
+                                          {k}
+                                        </Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
+                                  {customOptions.length > 0 && (
+                                    <View style={s.customKeywords}>
+                                      <Text style={s.muted}>
+                                        직접 추가한 키워드
+                                      </Text>
+                                      <View style={s.row}>
+                                        {customOptions.map((k) => (
+                                          <Pressable
+                                            key={k}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={
+                                              deletingKeywords ? `${k} 삭제` : k
+                                            }
+                                            accessibilityState={{
+                                              selected: draft.includes(k),
+                                            }}
+                                            onPress={() => {
+                                              if (deletingKeywords) {
+                                                setCustomOptions((old) =>
+                                                  old.filter((v) => v !== k),
+                                                );
+                                                setDraft((old) =>
+                                                  old.filter((v) => v !== k),
+                                                );
+                                                const nextKeys = keys.filter(
+                                                  (v) => v !== k,
+                                                );
+                                                setKeys(nextKeys);
+                                                setKeywords(nextKeys);
+                                              } else {
+                                                setDraft((old) =>
+                                                  old.includes(k)
+                                                    ? old.filter((v) => v !== k)
+                                                    : [...old, k],
+                                                );
+                                              }
+                                            }}
+                                            style={[
+                                              s.button,
+                                              draft.includes(k) && s.primary,
+                                              deletingKeywords &&
+                                                s.deletableKeyword,
+                                            ]}
+                                          >
+                                            <Text
+                                              style={
+                                                draft.includes(k)
+                                                  ? s.light
+                                                  : s.buttonText
+                                              }
+                                            >
+                                              {k}
+                                            </Text>
+                                          </Pressable>
+                                        ))}
+                                      </View>
+                                    </View>
+                                  )}
+                                  {deletingKeywords && (
+                                    <Text style={s.deleteHint}>
+                                      빨간 테두리의 키워드를 누르면 삭제됩니다.
+                                    </Text>
+                                  )}
+                                  <TextInput
+                                    editable={!deletingKeywords}
+                                    accessibilityLabel="직접 키워드 입력"
+                                    placeholder="직접 키워드 입력"
+                                    value={custom}
+                                    onChangeText={setCustom}
+                                    onSubmitEditing={addKey}
+                                    style={s.input}
+                                  />
+                                  <View style={s.keywordActions}>
+                                    <View style={{ flex: 7 }}>
+                                      <Pressable
+                                        accessibilityRole="button"
+                                        accessibilityLabel="키워드 추가"
+                                        disabled={deletingKeywords}
+                                        onPress={addKey}
+                                        style={[
+                                          s.button,
+                                          deletingKeywords && { opacity: 0.4 },
+                                        ]}
+                                      >
+                                        <Text style={s.buttonText}>
+                                          키워드 추가
+                                        </Text>
+                                      </Pressable>
+                                    </View>
+                                    <View style={{ flex: 3 }}>
+                                      <Button
+                                        label={
+                                          deletingKeywords
+                                            ? '삭제 취소'
+                                            : '키워드 삭제'
+                                        }
+                                        onPress={() =>
+                                          setDeletingKeywords((old) => !old)
+                                        }
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                                <Button
+                                  label="설정 저장"
+                                  primary
+                                  onPress={() => {
+                                    if (!draft.length) {
+                                      setMessage(
+                                        '선호 키워드를 하나 이상 선택해주세요.',
+                                      );
+                                      return;
+                                    }
+                                    setKeys([...draft]);
+                                    setKeywords([...draft]);
+                                    setMessage(
+                                      '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
+                                    );
+                                  }}
+                                />
+                                {testNotification && (
+                                  <Button
+                                    label={
+                                      testingNotification
+                                        ? '알림 예약 중…'
+                                        : '10초 뒤 테스트 알림'
+                                    }
+                                    onPress={async () => {
+                                      if (testingNotification) return;
+                                      setTestingNotification(true);
+                                      try {
+                                        const scheduled =
+                                          await testNotification();
+                                        setMessage(
+                                          scheduled
+                                            ? '테스트 알림을 예약했어요.'
+                                            : '기기 설정에서 알림을 허용해 주세요.',
+                                        );
+                                      } catch (error) {
+                                        setMessage(
+                                          error instanceof Error
+                                            ? error.message
+                                            : '테스트 알림을 예약하지 못했어요.',
+                                        );
+                                      } finally {
+                                        setTestingNotification(false);
+                                      }
+                                    }}
+                                  />
+                                )}
+                                {reservationStatus && (
+                                  <View style={s.card}>
+                                    <Text style={s.section}>
+                                      가상 공지 마감 알림 검증
+                                    </Text>
+                                    <Text style={s.muted}>
+                                      해커톤 공지를 선택하고 신청 상태를 준비
+                                      중으로 바꾼 뒤 예약하세요. 테스트 알림은
+                                      5분 뒤에 예정돼요.
+                                    </Text>
+                                    {([true, false] as const).map((enable) => (
+                                      <Button
+                                        key={String(enable)}
+                                        label={
+                                          enable
+                                            ? '가상 마감 알림 예약'
+                                            : '가상 마감 예약 수 확인'
+                                        }
+                                        onPress={async () => {
+                                          if (testingNotification) return;
+                                          setTestingNotification(true);
+                                          try {
+                                            const count =
+                                              await reservationStatus(enable);
+                                            setMessage(
+                                              `기기에 남은 가상 마감 예약 · ${count}건`,
+                                            );
+                                          } catch (error) {
+                                            setMessage(
+                                              error instanceof Error
+                                                ? error.message
+                                                : '예약을 확인하지 못했어요.',
+                                            );
+                                          } finally {
+                                            setTestingNotification(false);
+                                          }
+                                        }}
+                                      />
+                                    ))}
+                                  </View>
+                                )}
+                              </>
+                            )}
                             <Text style={s.muted}>
-                              해커톤 공지를 선택하고 신청 상태를 준비 중으로
-                              바꾼 뒤 예약하세요. 테스트 알림은 5분 뒤에
-                              예정돼요.
+                              가상 예시는 카드에 표시됩니다. 실제 공지의 내용은
+                              원문에서 확인하세요. 공지 선택과 준비물 체크는 이
+                              기기에 저장됩니다.
                             </Text>
-                            {([true, false] as const).map((enable) => (
-                              <Button
-                                key={String(enable)}
-                                label={
-                                  enable
-                                    ? '가상 마감 알림 예약'
-                                    : '가상 마감 예약 수 확인'
-                                }
-                                onPress={async () => {
-                                  if (testingNotification) return;
-                                  setTestingNotification(true);
-                                  try {
-                                    const count =
-                                      await reservationStatus(enable);
-                                    setMessage(
-                                      `기기에 남은 가상 마감 예약 · ${count}건`,
-                                    );
-                                  } catch (error) {
-                                    setMessage(
-                                      error instanceof Error
-                                        ? error.message
-                                        : '예약을 확인하지 못했어요.',
-                                    );
-                                  } finally {
-                                    setTestingNotification(false);
-                                  }
-                                }}
-                              />
-                            ))}
-                          </View>
+                          </GestureScrollView>
                         )}
-                      </>
-                    )}
-                    <Text style={s.muted}>
-                      가상 예시는 카드에 표시됩니다. 실제 공지의 내용은 원문에서
-                      확인하세요. 공지 선택과 준비물 체크는 이 기기에
-                      저장됩니다.
-                    </Text>
-                  </ScrollView>
-                )}
-              </View>
-            );
-          })}
-        </Animated.View>
-      </View>
+                      </View>
+                    );
+                  }}
+                />
+              ))}
+            </Reanimated.View>
+          </View>
+        </GestureDetector>
+      </PageGestureContext.Provider>
       {!!message && (
         <Pressable
           accessibilityRole="button"
@@ -1294,9 +1375,9 @@ export default function CampusApp() {
             aria-selected={page === i}
             accessibilityState={{
               selected: page === i,
-              disabled: pageTransitioning || draggingPage,
+              disabled: pageTransitioning,
             }}
-            disabled={pageTransitioning || draggingPage}
+            disabled={pageTransitioning}
 
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}

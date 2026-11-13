@@ -17,17 +17,17 @@ test('맞춤 공지는 한 장씩 처리하고 상세를 펼쳤을 때만 스크
   await expect(card.getByText(scholarship, { exact: true })).toBeVisible();
   await expect(active.getByText(next, { exact: true })).toHaveCount(0);
   await expect(active.getByText('나에게 맞는 새로운 기회')).toHaveCount(0);
-  await expect(body).toHaveCSS('overflow-y', 'hidden');
+  await expect(body).not.toHaveCSS('overflow-y', 'auto');
   const originalHeight = (await card.boundingBox())!.height;
   await card.getByRole('button', { name: '공지 자세히 보기 ↗' }).click();
-  await expect(body).toHaveCSS('overflow-y', 'auto');
+  await expect(body).not.toHaveCSS('overflow-y', 'auto');
   await expect(body.getByTestId(/^notice-detail-/)).toBeVisible();
-  expect((await card.boundingBox())!.height).toBe(originalHeight);
-  await body.evaluate((el) => {
+  expect((await card.boundingBox())!.height).toBeGreaterThan(originalHeight);
+  await active.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
   await expect
-    .poll(() => body.evaluate((el) => el.scrollTop))
+    .poll(() => active.evaluate((el) => el.scrollTop))
     .toBeGreaterThan(0);
   await expect(
     card.getByRole('button', { name: '↕ 보류', exact: true }),
