@@ -1,3 +1,4 @@
+import { NoticeSourceButton } from './NoticeSourceButton';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
 import { useCardMotion } from './gestureMotion';
@@ -148,18 +149,21 @@ export default function DiscoverCard({
               </Text>
             )}
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded }}
-            aria-expanded={expanded}
-            onPress={() => {
-              reset();
-              setExpanded(true);
-            }}
-            style={styles.detailToggle}
-          >
-            <Text style={styles.link}>공지 자세히 보기 ↗</Text>
-          </Pressable>
+          <View style={styles.detailToggle}>
+            <Pressable
+              style={styles.detailButton}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              aria-expanded={expanded}
+              onPress={() => {
+                reset();
+                setExpanded(true);
+              }}
+            >
+              <Text style={styles.link}>공지 자세히 보기 ↗</Text>
+            </Pressable>
+            <NoticeSourceButton notice={notice} />
+          </View>
           <View style={styles.actions}>
             {(
               [
@@ -291,11 +295,16 @@ const styles = StyleSheet.create({
   muted: { fontSize: 12, lineHeight: 19, color: '#728174' },
   tags: { fontSize: 12, lineHeight: 20, color: '#28634d' },
   detailToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingHorizontal: 18,
-    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#dfe5d9',
   },
+  detailButton: { minHeight: 44, justifyContent: 'center' },
   link: { fontSize: 12, color: '#28634d' },
   actions: {
     flexDirection: 'row',

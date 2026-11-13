@@ -1,3 +1,4 @@
+import { NoticeSourceButton } from './NoticeSourceButton';
 import { NoticeProgressSelect } from './NoticeProgressSelect';
 import {
   confirmedCardText,
@@ -217,7 +218,15 @@ function SwipeCard({
         {!!metadata && <Text style={s.muted}>{metadata}</Text>}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="← 휴지통으로 이동" onPress={() => act('discard')} />
+            <>
+              <Button
+                label="← 휴지통으로 이동"
+                onPress={() => act('discard')}
+              />
+              <View style={{ marginLeft: 'auto' }}>
+                <NoticeSourceButton notice={notice} />
+              </View>
+            </>
           ) : (
             <>
               {bucket === 'unseen' && (
@@ -238,6 +247,7 @@ function SwipeCard({
             </>
           )}
         </View>
+        {bucket !== 'saved' && <NoticeSourceButton notice={notice} />}
         {expanded && bucket === 'saved' && detailContent}
         <Pressable
           accessibilityRole="button"
@@ -263,8 +273,6 @@ export default function CampusApp() {
     actions,
     details,
     checklists,
-    notificationSnapshot,
-    refreshReminders,
     notices,
     home,
     syncState,
@@ -808,29 +816,6 @@ export default function CampusApp() {
             </>
           )}
 
-          {!notice.synthetic && selectedDetail && (
-            <View style={s.detailActions}>
-              <Button
-                half
-                label="공지 원문 열기"
-                onPress={() => {
-                  void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
-              <Button
-                half
-                label="분석 다시 시도"
-                onPress={() => {
-                  void analyzeNotice(notice.id).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
-            </View>
-          )}
-
           {selectedDetail?.disposition === 'saved' && (
             <>
               {selectedDetail.deadlineChanged && (
@@ -887,17 +872,6 @@ export default function CampusApp() {
               ) : (
                 <Text style={s.muted}>확인된 신청·제출 항목이 없어요.</Text>
               )}
-              <View style={s.reminderStatus}>
-                <Text style={s.muted}>
-                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
-                  상태이거나 예약 시각이 지났다면 예약하지 않아요.
-                </Text>
-                <Button
-                  label="알림 상태 다시 확인"
-                  disabled={detailUpdating}
-                  onPress={() => void updateDetail(notice.id, refreshReminders)}
-                />
-              </View>
             </>
           )}
         </View>
@@ -959,8 +933,6 @@ export default function CampusApp() {
                           status,
                           college,
                           saveProfile,
-                          notificationSnapshot,
-                          refreshReminders,
                         ]
                       : [
                           notices,
@@ -972,8 +944,6 @@ export default function CampusApp() {
                           dept,
                           grade,
                           status,
-                          notificationSnapshot,
-                          refreshReminders,
                           deferredNoticeIds,
                           pendingBuckets,
                           profile,
@@ -1873,12 +1843,7 @@ export default function CampusApp() {
 }
 const s = StyleSheet.create({
   checkedItem: { backgroundColor: '#e8f1e8', borderColor: '#83a26c' },
-  reminderStatus: {
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#f1f5e9',
-  },
+
   inlineDetail: {
     borderTopWidth: 1,
     borderTopColor: '#dfe5d9',
@@ -1921,7 +1886,6 @@ const s = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
-  detailActions: { flexDirection: 'row', gap: 8 },
   keywordActions: { flexDirection: 'row', gap: 7 },
   customKeywords: {
     borderTopWidth: 1,

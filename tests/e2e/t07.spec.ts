@@ -55,6 +55,15 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
       },
     });
   });
+  await page.addInitScript(() => {
+    Object.assign(window, { openedNoticeUrls: [] as string[] });
+    window.open = (url) => {
+      (
+        window as typeof window & { openedNoticeUrls: string[] }
+      ).openedNoticeUrls.push(String(url));
+      return null;
+    };
+  });
   await page.goto('/');
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await page
@@ -121,14 +130,57 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   const card = page.getByTestId('discover-card');
   await expect(card).not.toContainText(/확인 필요|원문에서 확인|시각 미확인/);
   await card
+    .getByRole('button', { name: '공지 원문 열기', exact: true })
+    .click();
+  await expect(
+    card.getByRole('button', { name: '공지 자세히 보기 ↗', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  expect(
+    await page.evaluate(() =>
+      (
+        window as typeof window & { openedNoticeUrls: string[] }
+      ).openedNoticeUrls.at(-1),
+    ),
+  ).toBe(
+    verified.results.find(({ envelope }) =>
+      envelope.notice_id.startsWith('seoultech_cs:'),
+    )!.source_url,
+  );
+  await card
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await page.getByRole('button', { name: '관심 저장', exact: true }).click();
   await page.getByRole('tab', { name: '메인', exact: true }).click();
+  const savedCard = actualCsTitle.locator('..');
+  const sourceButton = savedCard.getByRole('button', {
+    name: '공지 원문 열기',
+    exact: true,
+  });
+  await sourceButton.click();
+  await expect(
+    savedCard.getByRole('button', { name: '공지 자세히 보기 ∨', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  const sourceBox = (await sourceButton.boundingBox())!;
+  const discardBox = (await savedCard
+    .getByRole('button', { name: '← 휴지통으로 이동', exact: true })
+    .boundingBox())!;
+  expect(Math.abs(sourceBox.y - discardBox.y)).toBeLessThan(3);
+  expect(sourceBox.x).toBeGreaterThan(discardBox.x + discardBox.width);
   await actualCsTitle
     .locator('..')
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
+  await expect(
+    savedCard.getByRole('button', { name: '공지 원문 열기', exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    savedCard.getByRole('button', { name: '분석 다시 시도', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    savedCard
+      .getByTestId(/^notice-detail-/)
+      .getByRole('button', { name: '공지 원문 열기', exact: true }),
+  ).toHaveCount(0);
   const cs = verified.results.find(({ envelope }) =>
     envelope.notice_id.startsWith('seoultech_cs:'),
   )!;
