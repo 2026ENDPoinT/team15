@@ -347,6 +347,59 @@ test('영구 삭제는 휴지통에만 적용되고 재수집 및 저장소 재�
   }
 });
 
+test('analysis tags accumulate independently of notice deletion and survive reopening', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    let repository = await openRepository(db);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    assert.equal(
+      await repository.applyAnalysis({
+        ...analysis,
+        content_hash: '0'.repeat(64),
+        data: { ...analysis.data, tags: ['rejected'] },
+      }),
+      false,
+    );
+    assert.deepEqual(await repository.listDiscoveredKeywords(), []);
+    await repository.applyAnalysis({
+      ...analysis,
+      data: { ...analysis.data, tags: ['new topic', 'new topic', ' second '] },
+    });
+    assert.deepEqual(await repository.listDiscoveredKeywords(), [
+      'new topic',
+      'second',
+    ]);
+    assert.equal(await repository.getProfile(), null);
+    await repository.dismissNotice(notice.id);
+    await repository.deleteNotice(notice.id);
+    repository = await openRepository(db);
+    assert.deepEqual(await repository.listDiscoveredKeywords(), [
+      'new topic',
+      'second',
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
+test('version four migration imports existing fresh analysis tags', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    const repository = await openRepository(db);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    db.exec('DROP TABLE discovered_keywords; PRAGMA user_version = 4;');
+    const migrated = await openRepository(db);
+    assert.deepEqual(await migrated.listDiscoveredKeywords(), [
+      ...new Set(analysis.data.tags.map((tag) => tag.trim())),
+    ]);
+  } finally {
+    db.close();
+  }
+});
+
 test('메인에서 버린 저장 공지는 휴지통으로 이동하고 알림을 다시 동기화한다', async () => {
   const db = new DatabaseSync(':memory:');
   try {
