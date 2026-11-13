@@ -84,3 +84,13 @@ SDK 58 전환 재검증(2026-11-13): Node.js 24.22.3에서 `npm ci`, Expo Doctor
 - [Expo SDK 업그레이드](https://docs.expo.dev/workflow/upgrading-expo-sdk-walkthrough/), [SDK 58 변경 사항](https://expo.dev/changelog/sdk-58): SDK 57에서 58로 올리고 호환 의존성을 함께 갱신.
 - [Expo Router 설치](https://docs.expo.dev/router/installation/): 기존 shared 프로젝트에 Router 진입점·호환 패키지 추가.
 - [Node.js 릴리스](https://nodejs.org/en/about/previous-releases): 팀 권장 런타임은 Node 24 LTS, 실행 버전은 `.nvmrc`로 고정.
+
+## HTML UI 정합성 반영 (2026-11-13)
+
+- 루트 Expo 화면은 `src/components/CampusApp.tsx`에서 HTML 시안의 A 휴지통 / B 맞춤 공지 / C 메인 / D 설정 순서로 표시한다. 시작 화면은 C다.
+- 녹색·연두색 팔레트, 공지 카드, 월별 캘린더와 날짜 필터, 학과·학년·학적과 키워드 설정을 반영했다.
+- 공지는 unseen / saved / dismissed로 분류하며 영구 삭제는 제공하지 않는다. 보류는 화면을 떠나면 해제한다.
+- 카드 내 스와이프는 분류와 보류, 카드 밖 가로 스와이프는 화면 이동에 사용한다. 같은 동작을 버튼으로도 제공한다.
+- 다섯 개 가상 공지를 사용하는 UI 데모다. 상태는 실행 중 메모리에 유지되며 재시작 시 초기화된다. HTML의 localStorage에 해당하는 기기 영속 저장, 실제 수집·AI 분석·알림은 미구현이다.
+- `/discover`는 통합된 네 화면의 진입점 `/`로 이동한다. 기존 상세 경로는 별도 T01 데모이며 새 카드 상세는 모달을 사용한다.
+- Android 실기기에서 카드의 수직 보류와 목록 스크롤의 터치 우선순위를 추가 확인해야 한다.
