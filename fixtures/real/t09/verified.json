@@ -1,0 +1,127 @@
+{
+  "verified_at": "2026-11-13T16:08:24.128Z",
+  "input_kind": "live_html",
+  "device_validation": false,
+  "os_schedule_verified": false,
+  "raw_html_sha256": "8e16bf86d0228fbd9febd9dad1653e3cc72ae215f434a48188b7cf634c7094fe",
+  "notice": {
+    "id": "seoultech_general:4691:897698",
+    "sourceId": "seoultech_general",
+    "boardId": "4691",
+    "postId": "897698",
+    "sourceUrl": "https://www.seoultech.ac.kr/service/info/notice?do=commonview&bnum=4691&bidx=897698",
+    "title": "[국립대학육성사업] 제7회 국립대학육성사업 영상 콘텐츠 공모전 개최 안내",
+    "publishedDate": "2026-11-11",
+    "bodyText": "국립대학육성사업 발전협의회에서는 ‘제7회 국립대학육성사업 영상 콘텐츠 공모전’을 다음과 같이 개최하오니 국립대학 재학생들의 많은 관심과 참여 바랍니다.\n\n□ 공모전명 : 제7회 국립대학육성사업 영상 콘텐츠 공모전\n\n□ 주최·주관 : 국립대학육성사업 발전협의회\n\n□ 공모기간 : 2026년 11월 2일(월) ~ 12월 27일(일)\n\n□ 응모자격 : 전국 36개 국립대학 대학(원)생(휴학생 포함)\n\n※ 개인 또는 팀(최대 5인 구성)\n\n□ 작품형식 : 영상콘텐츠(단편영화, 웹드라마, 스케치코미디, CF, 다큐멘터리 등 자유형식)\n\n□ 작품분량 : 1분 이상(5분 권장)\n\n□ 작품규격 : 해상도 FHD 이상, 가로·세로 비율 자유\n\n□ 공모주제\n\n1. 국립대학육성사업 소개 및 참여사례\n\n2. 국립대학의 역할과 발전 방향\n\n3. 국립대학의 교육 혁신 관련 주제\n\n□ 응모방법\n\n개인 SNS 계정에 업로드 후 신청서 및 동영상 원본파일을 이메일(joonsoo@cnu.ac.kr)로 접수\n\n□ 심사방법\n\n1차 심사: 심사위원 심사\n\n2차 심사: 대중성 심사(발전협의회 유튜브채널 업로드 후 조회수, 좋아요수 심사)\n\n□ 시상내역\n\n- 대 상 : 300만원 및 상장(발전협의회장상)\n\n- 최우수상 : 200만원 및 상장(발전협의회장상)\n\n- 우 수 상 : 150만원 및 상장(발전협의회장상)\n\n- 장 려 상 : 100만원 및 상장(발전협의회장상)\n\n- 애교(愛校)상 : 50만원 및 상장(발전협의회장상)\n\n■ 문의사항\n\n국립대학육성사업 발전협의회 사무국 ☎ 042)821-8453\n\n■ 국립대학육성사업 발전협의회 유튜브 채널 : https://www.youtube.com/@koreanudp\n\n☞ 작년 수상작: https://youtube.com/playlist?list=PLRGpJ0L9-_HlAx2H3G95dzADJVBwRXZFt&si=XPsxNFDcHdGOl5Kh\n\n자세한 사항은 공고문(첨부파일)을 참조해주시기 바랍니다. 많은 관심과 참여 부탁드립니다.",
+    "extractedLinks": [
+      {
+        "label": "https://www.youtube.com/@koreanudp",
+        "url": "https://www.youtube.com/@koreanudp"
+      },
+      {
+        "label": "https://youtube.com/playlist?list=PLRGpJ0L9-_HlAx2H3G95dzADJVBwRXZFt&si=XPsxNFDcHdGOl5Kh",
+        "url": "https://youtube.com/playlist?list=PLRGpJ0L9-_HlAx2H3G95dzADJVBwRXZFt&si=XPsxNFDcHdGOl5Kh"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "[붙임1] 제7회 국립대학육성사업 영상콘텐츠 공모전 안내문.hwpx",
+        "url": null
+      }
+    ],
+    "hasBodyImages": true,
+    "sourceUpdatedAt": null,
+    "fetchedAt": "2026-11-13T16:08:15.470Z",
+    "contentHash": "fc2d9ea5274f1bce246862b6fcedf35f2c026bfc080c61b4b73de0a4189cbeba"
+  },
+  "envelope": {
+    "notice_id": "seoultech_general:4691:897698",
+    "content_hash": "fc2d9ea5274f1bce246862b6fcedf35f2c026bfc080c61b4b73de0a4189cbeba",
+    "schema_version": "1.1",
+    "extractor_version": "e1",
+    "analyzed_at": "2026-11-13T16:08:24.031Z",
+    "data": {
+      "summary": "국립대학육성사업 발전협의회에서 주최·주관하는 제7회 국립대학육성사업 영상 콘텐츠 공모전 개최 안내",
+      "tags": ["공모전", "영상콘텐츠", "국립대학육성사업"],
+      "benefits": [
+        "대상: 300만원 및 상장(발전협의회장상)",
+        "최우수상: 200만원 및 상장(발전협의회장상)",
+        "우수상: 150만원 및 상장(발전협의회장상)",
+        "장려상: 100만원 및 상장(발전협의회장상)",
+        "애교(愛校)상: 50만원 및 상장(발전협의회장상)"
+      ],
+      "activity": {
+        "period_text": "2026년 11월 2일(월) ~ 12월 27일(일)",
+        "frequency_text": null,
+        "location_text": null,
+        "evidence": "공모기간 : 2026년 11월 2일(월) ~ 12월 27일(일)"
+      },
+      "eligibility": {
+        "comparison": "all_of",
+        "departments": {
+          "mode": "unknown",
+          "values": [],
+          "evidence": null
+        },
+        "grades": {
+          "mode": "unknown",
+          "values": [],
+          "evidence": null
+        },
+        "enrollments": {
+          "mode": "specific",
+          "values": ["enrolled", "leave"],
+          "evidence": "전국 36개 국립대학 대학(원)생(휴학생 포함)"
+        },
+        "other_conditions": [
+          "전국 36개 국립대학 대학(원)생",
+          "개인 또는 팀(최대 5인 구성)"
+        ]
+      },
+      "events": [
+        {
+          "type": "application_open",
+          "label": "공모기간 시작",
+          "evidence": "공모기간 : 2026년 11월 2일(월) ~ 12월 27일(일)",
+          "status": "resolved",
+          "date": "2026-11-02",
+          "time": null,
+          "timezone": "Asia/Seoul",
+          "precision": "date"
+        },
+        {
+          "type": "application_close",
+          "label": "공모기간 마감",
+          "evidence": "공모기간 : 2026년 11월 2일(월) ~ 12월 27일(일)",
+          "status": "resolved",
+          "date": "2026-12-27",
+          "time": null,
+          "timezone": "Asia/Seoul",
+          "precision": "date"
+        }
+      ],
+      "checklist": [
+        {
+          "text": "개인 SNS 계정에 영상 업로드",
+          "evidence": "개인 SNS 계정에 업로드 후 신청서 및 동영상 원본파일을 이메일(joonsoo@cnu.ac.kr)로 접수"
+        },
+        {
+          "text": "신청서 및 동영상 원본파일 이메일(joonsoo@cnu.ac.kr) 접수",
+          "evidence": "개인 SNS 계정에 업로드 후 신청서 및 동영상 원본파일을 이메일(joonsoo@cnu.ac.kr)로 접수"
+        }
+      ],
+      "application_url": null,
+      "review_notes": [
+        "첨부파일 및 본문 내 이미지는 확인하지 못했으므로 공고문을 별도로 확인하시기 바랍니다.",
+        "첨부파일 내용은 분석하지 않았습니다. 원문에서 첨부를 확인하세요.",
+        "본문 이미지 내용은 분석하지 않았습니다. 원문에서 이미지를 확인하세요."
+      ]
+    }
+  },
+  "ai_calls": 1,
+  "cache_extra_calls": 0,
+  "sqlite_reopened": true,
+  "checklist_preserved": true,
+  "progress_preserved": true,
+  "desired_fire_at": "2026-12-26T00:00:00.000Z"
+}

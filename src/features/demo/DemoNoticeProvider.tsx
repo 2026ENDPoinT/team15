@@ -36,6 +36,7 @@ import { toNoticeCard } from './noticeReadModel';
 
 const dataListeners = new Set<() => Promise<void>>();
 let currentKeywords = ['대회', '장학금'];
+let reminderWarning: string | null = null;
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -80,7 +81,7 @@ async function openDemoRepository() {
     }
     const platform = deadlineNotifications;
     let demoFireAt: string | null = null;
-    const reconcile = platform
+    const reconcilePlatform = platform
       ? createReminderReconciler(
           repository,
           platform,
@@ -94,6 +95,22 @@ async function openDemoRepository() {
                 : null
               : reminderFireAt(saved.events, now),
         )
+      : undefined;
+    const reconcile = reconcilePlatform
+      ? async () => {
+          try {
+            await reconcilePlatform();
+            reminderWarning = (await repository.listReminders()).some(
+              ({ state }) => state === 'error',
+            )
+              ? '알림 변경을 완료하지 못했어요. 다음 갱신에서 다시 확인합니다.'
+              : null;
+          } catch {
+            reminderWarning =
+              '알림 변경을 완료하지 못했어요. 다음 갱신에서 다시 확인합니다.';
+          }
+          await Promise.all([...dataListeners].map((listener) => listener()));
+        }
       : undefined;
     const reservationStatus =
       platform && reconcile
@@ -167,6 +184,7 @@ async function readState(repository: Repository) {
   );
   return {
     home,
+    reminderWarning,
     notices: entries
       .flatMap(({ record, detail }) =>
         detail ? [toNoticeCard(record, detail)] : [],
@@ -210,6 +228,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
     | 'dismissNotice'
     | 'setProgress'
     | 'setChecklistCompleted'
+    | 'acknowledgeDeadlineChange'
   > & { restoreNotice(id: string): Promise<void> };
 };
 
@@ -336,6 +355,8 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       update((actions) => actions.setProgress(id, progress)),
     setChecklistCompleted: (id, completed) =>
       update((actions) => actions.setChecklistCompleted(id, completed)),
+    acknowledgeDeadlineChange: (id) =>
+      update((actions) => actions.acknowledgeDeadlineChange(id)),
   };
   return (
     <DemoNoticeContext.Provider

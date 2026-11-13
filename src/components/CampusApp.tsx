@@ -19,22 +19,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import { AnalysisSettings } from './AnalysisSettings';
-import type { Disposition as Bucket } from '../../shared/contracts';
+import type { Disposition as Bucket, Profile } from '../../shared/contracts';
+import {
+  evaluateEligibility,
+  type EligibilityResult,
+} from '../domain/eligibility';
+
+const eligibilityLabels = {
+  basic_match: '기본 조건 일치',
+  mismatch: '지원 조건 불일치',
+  needs_review: '지원 조건 확인 필요',
+};
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
 const green = '#28634d';
 function Button({
   label,
   onPress,
   primary = false,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   primary?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={[s.button, primary && s.primary]}
     >
@@ -48,12 +62,14 @@ function SwipeCard({
   act,
   detail,
   onDragging,
+  eligibility,
 }: {
   notice: Notice;
   bucket: Bucket;
   act: (action: string) => void;
   detail: () => void;
   onDragging: (dragging: boolean) => void;
+  eligibility: EligibilityResult;
 }) {
   const position = useRef(new Animated.ValueXY()).current;
   const axis = useRef<'x' | 'y' | null>(null);
@@ -136,6 +152,7 @@ function SwipeCard({
         ))}
       </View>
       <Text style={s.reason}>{notice.summary}</Text>
+      <Text style={s.muted}>{eligibilityLabels[eligibility.result]}</Text>
       <Text style={s.muted}>
         {notice.date
           ? `${notice.date} · ${notice.time ? `${notice.time} KST` : '시각 미확인'}`
@@ -179,6 +196,7 @@ export default function CampusApp() {
     home,
     syncState,
     syncStatus,
+    reminderWarning,
     refreshNotices,
     analyzeNotice,
     setKeywords,
@@ -302,16 +320,35 @@ export default function CampusApp() {
   };
   const bucket: Bucket =
     page === 0 ? 'dismissed' : page === 1 ? 'unseen' : 'saved';
+  const profile: Pick<Profile, 'department' | 'grade' | 'enrollment'> = {
+    department: dept,
+    grade: Number(grade.slice(0, 1)) as Profile['grade'],
+    enrollment:
+      status === '재학' ? 'enrolled' : status === '휴학' ? 'leave' : 'other',
+  };
+  const eligibility = Object.fromEntries(
+    notices.map(({ id }) => [
+      id,
+      evaluateEligibility(
+        profile,
+        details[id]?.analysis?.data ?? null,
+        details[id]?.analysisFresh ?? false,
+      ),
+    ]),
+  );
   const visible = notices.filter(
     (n) =>
       buckets[n.id] === bucket &&
       !held.includes(n.id) &&
       (page !== 1 ||
         showAll ||
-        keys.some(
-          (k) =>
-            n.tags.includes(k) || n.title.includes(k) || n.summary.includes(k),
-        )),
+        (eligibility[n.id]!.result !== 'mismatch' &&
+          keys.some(
+            (k) =>
+              n.tags.includes(k) ||
+              n.title.includes(k) ||
+              n.summary.includes(k),
+          ))),
   );
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
   const events = home.schedule.filter(
@@ -321,9 +358,11 @@ export default function CampusApp() {
   const selectedDetail = detail ? details[detail.id] : undefined;
   const selectedChecklist = detail ? checklists[detail.id] : undefined;
   const [detailError, setDetailError] = useState(false);
+  const [detailUpdating, setDetailUpdating] = useState(false);
   async function updateDetail(write: () => Promise<void>) {
     if (changing.current) return;
     changing.current = true;
+    setDetailUpdating(true);
     setDetailError(false);
     try {
       await write();
@@ -331,6 +370,7 @@ export default function CampusApp() {
       setDetailError(true);
     } finally {
       changing.current = false;
+      setDetailUpdating(false);
     }
   }
   const addKey = () => {
@@ -547,6 +587,7 @@ export default function CampusApp() {
                     key={n.id}
                     notice={n}
                     bucket={bucket}
+                    eligibility={eligibility[n.id]!}
                     onDragging={setCardDragging}
                     act={(action) => act(n.id, action)}
                     detail={() => {
@@ -736,10 +777,16 @@ export default function CampusApp() {
               </>
             )}
             {__DEV__ && page === 1 && (
-              <Button
-                label="T02 수집 검증 열기"
-                onPress={() => router.push('/dev/collection')}
-              />
+              <>
+                <Button
+                  label="T02 수집 검증 열기"
+                  onPress={() => router.push('/dev/collection')}
+                />
+                <Button
+                  label="T09 변경·알림 검증 열기"
+                  onPress={() => router.push('/dev/t09')}
+                />
+              </>
             )}
             <Text style={s.muted}>
               가상 예시는 카드에 표시됩니다. 실제 공지의 내용과 신청 방법은
@@ -749,6 +796,11 @@ export default function CampusApp() {
             {!!syncStatus.message && (
               <Text accessibilityLiveRegion="polite" style={s.reason}>
                 {syncStatus.message}
+              </Text>
+            )}
+            {!!reminderWarning && reminderWarning !== syncStatus.message && (
+              <Text accessibilityLiveRegion="polite" style={s.reason}>
+                {reminderWarning}
               </Text>
             )}
             {!!syncStatus.analysisRetryAt &&
@@ -817,6 +869,12 @@ export default function CampusApp() {
                 ? `${detail.org}\n\n${detail.summary}\n\n${detail.date ? `${detail.date} ${detail.time ?? '시각 미확인'}` : '확정 신청 마감 없음 · 원문 확인 필요'}\n\n${detail.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : detail.analysisLabel}`
                 : '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 다른 화면에 갔다 돌아오면 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'}
             </Text>
+            {detail && (
+              <Text style={s.reason}>
+                {eligibilityLabels[eligibility[detail.id]!.result]} ·{' '}
+                {eligibility[detail.id]!.reasons.join(' ')}
+              </Text>
+            )}
             {detail && !detail.synthetic && selectedDetail && (
               <>
                 <Button
@@ -866,6 +924,7 @@ export default function CampusApp() {
                 {selectedDetail.disposition !== 'saved' && (
                   <Button
                     label="관심 저장"
+                    disabled={detailUpdating}
                     onPress={() =>
                       void updateDetail(() => actions.saveNotice(detail.id))
                     }
@@ -875,6 +934,22 @@ export default function CampusApp() {
             )}
             {detail && selectedDetail?.disposition === 'saved' && (
               <>
+                {selectedDetail.deadlineChanged && (
+                  <>
+                    <Text style={s.reason}>
+                      마감이 변경되었어요. 새 일정을 확인해 주세요.
+                    </Text>
+                    <Button
+                      label="마감 변경 확인"
+                      disabled={detailUpdating}
+                      onPress={() =>
+                        void updateDetail(() =>
+                          actions.acknowledgeDeadlineChange(detail.id),
+                        )
+                      }
+                    />
+                  </>
+                )}
                 <Text style={s.section}>준비물</Text>
                 {selectedChecklist?.updatedChecklist && (
                   <Text style={s.reason}>
@@ -888,6 +963,7 @@ export default function CampusApp() {
                   selectedChecklist.items.map((item) => (
                     <Button
                       key={item.id}
+                      disabled={detailUpdating}
                       label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
                       onPress={() =>
                         void updateDetail(() =>
@@ -913,6 +989,7 @@ export default function CampusApp() {
                 {selectedDetail.progress !== 'preparing' && (
                   <Button
                     label="준비 중으로 변경"
+                    disabled={detailUpdating}
                     onPress={() =>
                       void updateDetail(() =>
                         actions.setProgress(detail.id, 'preparing'),
@@ -923,6 +1000,7 @@ export default function CampusApp() {
                 {selectedDetail.progress !== 'applied' && (
                   <Button
                     label="신청 완료로 변경"
+                    disabled={detailUpdating}
                     onPress={() =>
                       void updateDetail(() =>
                         actions.setProgress(detail.id, 'applied'),
