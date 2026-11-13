@@ -183,7 +183,6 @@ function SwipeCard({
             </Text>
           ))}
         </View>
-        <Text style={s.reason}>{notice.summary}</Text>
         <Text style={s.muted}>{eligibilityLabel}</Text>
         <Text style={s.muted}>
           {notice.date
@@ -486,28 +485,34 @@ export default function CampusApp() {
               ? '준비 중'
               : '관심 저장'}
         </Text>
-        {selectedDetail.progress !== 'preparing' && (
-          <Button
-            label="준비 중으로 변경"
-            disabled={detailUpdating}
-            onPress={() =>
-              void updateDetail(notice.id, () =>
-                actions.setProgress(notice.id, 'preparing'),
-              )
-            }
-          />
-        )}
-        {selectedDetail.progress !== 'applied' && (
-          <Button
-            label="신청 완료로 변경"
-            disabled={detailUpdating}
-            onPress={() =>
-              void updateDetail(notice.id, () =>
-                actions.setProgress(notice.id, 'applied'),
-              )
-            }
-          />
-        )}
+        <View style={s.detailActions}>
+          <View style={{ flex: 1 }}>
+            {selectedDetail.progress !== 'preparing' && (
+              <Button
+                label="준비 중으로 변경"
+                disabled={detailUpdating}
+                onPress={() =>
+                  void updateDetail(notice.id, () =>
+                    actions.setProgress(notice.id, 'preparing'),
+                  )
+                }
+              />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            {selectedDetail.progress !== 'applied' && (
+              <Button
+                label="신청 완료로 변경"
+                disabled={detailUpdating}
+                onPress={() =>
+                  void updateDetail(notice.id, () =>
+                    actions.setProgress(notice.id, 'applied'),
+                  )
+                }
+              />
+            )}
+          </View>
+        </View>
         {detailErrors[notice.id] && (
           <Text accessibilityRole="alert">변경 내용을 저장하지 못했어요.</Text>
         )}
