@@ -84,12 +84,14 @@ function Button({
   onPress,
   primary = false,
   disabled = false,
+  half = false,
 }: {
   label: string;
   accessibilityLabel?: string;
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
+  half?: boolean;
 }) {
   return (
     <Pressable
@@ -98,7 +100,7 @@ function Button({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[s.button, primary && s.primary]}
+      style={[s.button, half && { flex: 1 }, primary && s.primary]}
     >
       <Text style={[s.buttonText, primary && s.light]}>{label}</Text>
     </Pressable>
@@ -185,7 +187,7 @@ function SwipeCard({
         <Text style={s.muted}>{eligibilityLabel}</Text>
         <Text style={s.muted}>
           {notice.date
-            ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
+            ? `${notice.date}${notice.time ? ` · ${notice.time} KST` : ''}`
             : '정확한 일정은 원문에서 확인'}
         </Text>
         {bucket === 'saved' && progressContent}
@@ -537,22 +539,26 @@ export default function CampusApp() {
           </Text>
           {!notice.synthetic && selectedDetail && (
             <>
-              <Button
-                label="공지 원문 열기"
-                onPress={() => {
-                  void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
-              <Button
-                label="분석 다시 시도"
-                onPress={() => {
-                  void analyzeNotice(notice.id).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
+              <View style={s.detailActions}>
+                <Button
+                  half
+                  label="공지 원문 열기"
+                  onPress={() => {
+                    void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
+                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                    );
+                  }}
+                />
+                <Button
+                  half
+                  label="분석 다시 시도"
+                  onPress={() => {
+                    void analyzeNotice(notice.id).catch(() =>
+                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                    );
+                  }}
+                />
+              </View>
               {detailReviewNotes(
                 selectedDetail.analysisFresh
                   ? (selectedDetail.analysis?.data.review_notes ?? [])
@@ -569,7 +575,7 @@ export default function CampusApp() {
                   <Text key={index} style={s.description}>
                     {event.label} ·{' '}
                     {event.status === 'resolved'
-                      ? `${event.date} ${event.time ?? '시각 미확인'}`
+                      ? `${event.date}${event.time ? ` ${event.time}` : ''}`
                       : '날짜 확인 필요'}
                   </Text>
                 ))}
@@ -642,7 +648,7 @@ export default function CampusApp() {
                   >
                     <Text
                       style={s.buttonText}
-                    >{`${item.completed ? '☑ 완료' : '☐ 미완료'} · ${item.text}`}</Text>
+                    >{`${item.completed ? '☑' : '☐'} ${item.text}`}</Text>
                   </Pressable>
                 ))
               ) : (
@@ -657,9 +663,7 @@ export default function CampusApp() {
                   )}
                 </Text>
                 <Text style={s.muted}>
-                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
-                  상태이거나 예약 시각이 지났다면 예약하지 않아요. 가상 공지는
-                  테스트 예약을 사용해요.
+                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요.
                 </Text>
                 <Button
                   label="알림 상태 다시 확인"
@@ -792,6 +796,20 @@ export default function CampusApp() {
                         )
                       );
                     });
+                    if (page === 2) {
+                      const priority = { preparing: 0, saved: 1, applied: 2 };
+                      visible.sort((a, b) => {
+                        const rank = (id: string) => {
+                          const progress = details[id]?.progress;
+                          return progress === 'preparing'
+                            ? priority.preparing
+                            : progress === 'applied'
+                              ? priority.applied
+                              : priority.saved;
+                        };
+                        return rank(a.id) - rank(b.id);
+                      });
+                    }
                     const nextNotice = visible[0];
                     return (
                       <View
@@ -1128,7 +1146,7 @@ export default function CampusApp() {
                                     ? events
                                         .map(
                                           (event) =>
-                                            `${event.date} ${event.time ?? '시각 미확인'} · ${event.label} · ${event.title}`,
+                                            `${event.date}${event.time ? ` ${event.time}` : ''} · ${event.label} · ${event.title}`,
                                         )
                                         .join('\n')
                                     : '선택한 일정이 없어요.'}
@@ -1635,6 +1653,7 @@ const s = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
+  detailActions: { flexDirection: 'row', gap: 8 },
   keywordActions: { flexDirection: 'row', gap: 7 },
   customKeywords: {
     borderTopWidth: 1,
