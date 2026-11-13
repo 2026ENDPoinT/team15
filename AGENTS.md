@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository contains the T01 Expo application scaffold, planning documentation, shared contracts, synthetic fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The AI Worker, live collection, and SQLite persistence have not been implemented. Android device verification is pending.
+This repository contains the T01 Expo application scaffold, T02 live collection adapters, planning documentation, shared contracts, synthetic and real HTML fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The AI Worker and SQLite persistence have not been implemented on this branch. T01 basic flows and T02 Android device verification were confirmed complete by the user on 2026-11-13; see the T02 handoff for the scope and evidence.
 
 - `README.md`: team and project identification.
 - `docs/campus_notice_hackathon_plan.md`: product scope, workflows, and delivery checklist.
@@ -13,7 +13,10 @@ This repository contains the T01 Expo application scaffold, planning documentati
 - `tests/`: contract and canonicalization tests.
 - `app/`: Expo Router home/discover tabs and shared notice detail.
 - `src/`: shared UI and temporary in-memory demo state.
-- `docs/campus_notice_t01_handoff.md`: app execution, ownership boundaries, and remaining device checks.
+- `docs/campus_notice_t01_handoff.md`: app execution, ownership boundaries, and device checks.
+- `src/sources/`: board adapters, HTML cleanup, collection, and smoke verification.
+- `fixtures/real/`: original public HTML responses and capture metadata.
+- `docs/campus_notice_t02_handoff.md`: collection contracts, automated validation, and user-reported device verification.
 
 The AI proxy in `worker/` remains planned. Keep SQL, HTML parsing, and AI SDK calls out of screens; isolate eligibility and date calculations as pure functions. Replace the temporary demo provider with B's repository/service boundary when implementing persistence.
 

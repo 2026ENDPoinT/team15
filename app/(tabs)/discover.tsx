@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { NoticeCard } from '../../src/components/NoticeCard';
 import {
   ActionButton,
@@ -46,6 +47,13 @@ export default function DiscoverScreen() {
             : '관심 저장하면 홈에서 일정과 함께 볼 수 있어요.'}
         </Text>
       </View>
+      {__DEV__ ? (
+        <ActionButton
+          secondary
+          label="T02 수집 검증 열기"
+          onPress={() => router.push('/dev/collection')}
+        />
+      ) : null}
     </Screen>
   );
 }

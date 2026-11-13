@@ -6,7 +6,7 @@ ENDPoinT 해커톤 2026 Team 15
 
 ## 1 현재 구현 범위
 
-T01의 Expo 앱 뼈대와 역할 C의 공통 계약·가상 샘플을 구현했다. 홈·공지 찾기·상세가 같은 공지를 표시하며 관심 저장 상태를 공유한다. **Android 실기기 확인은 보류 중**이다. SQLite 영속 저장, 실제 수집, AI Worker, 알림은 아직 구현하지 않았다.
+T01의 Expo 앱 뼈대와 역할 C의 공통 계약·가상 샘플, T02의 두 게시판 수집 어댑터를 구현했다. 홈·공지 찾기·상세는 아직 가상 공지를 표시하며 관심 저장 상태를 공유한다. 실제 수집은 별도의 개발 검증 화면과 CLI에서 실행한다. **Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. SQLite 영속 저장, AI Worker, 알림과 실제 공지의 제품 화면 연결은 아직 구현하지 않았다.
 
 | 경로                     | 내용                                               |
 | ------------------------ | -------------------------------------------------- |
@@ -18,8 +18,14 @@ T01의 Expo 앱 뼈대와 역할 C의 공통 계약·가상 샘플을 구현했�
 | `shared/mappers.ts`      | 수집 공지 → AI 요청 변환                           |
 | `fixtures/synthetic/`    | 가상 공지 5건, 오류 응답, 시연 프로필              |
 | `tests/*.test.ts`        | 계약·날짜 유효성·정규화·샘플 일관성 검증           |
+| `src/sources/`           | 두 게시판 목록·상세 파싱, 수집, 부분 실패 처리     |
+| `src/platform/sha256.ts` | Expo SHA-256 구현                                  |
+| `fixtures/real/`         | 출처·수집 시각·원본 해시가 있는 실제 HTML          |
+| `app/dev/collection.tsx` | 기기 수집·해시 검증 화면                           |
 
 [T01 팀 인계 및 실기기 체크리스트](docs/campus_notice_t01_handoff.md), [역할 C 착수 계획](docs/campus_notice_c_startup_plan.md), [샘플 사용법](fixtures/README.md)을 참고한다. 샘플은 실제 공지나 실제 AI 응답이 아니며, UI에도 가상 데이터임을 표시한다.
+
+[T02 수집 인계 및 기기 검증](docs/campus_notice_t02_handoff.md)에 어댑터 계약 변경, 실제 HTML 검증 결과와 실기기 확인 기록을 정리했다. 가상 샘플은 `fixtures/synthetic/`, 실제 원본은 `fixtures/real/`로 구분한다.
 
 ## 2 설치와 개발
 
@@ -60,6 +66,14 @@ npm run test:e2e
 ```
 
 `build:android`는 Android용 Metro/Hermes 번들만 생성하며 **설치 가능한 APK를 만들지 않는다**. Expo Go 실행과 독립 APK 제출은 구분한다. 웹 테스트도 실기기 확인을 대신하지 않는다. 출력은 `dist/`, UI 테스트 결과는 `test-results/`에 저장한다. Worker 배포 명령은 T05에서 추가한다.
+
+T02의 실제 서버 수집 확인(두 게시판 각각 목록 1·2페이지와 상세 1건, 네트워크 필요):
+
+```sh
+npm run collect:smoke
+```
+
+기기에서는 `npm run start`로 실행하고 **공지 찾기 → T02 수집 검증 열기 → 두 게시판 수집 확인**을 누른다. 진입 버튼은 개발 모드에만 표시한다. 검증 화면은 `/dev/collection`이며 결과를 DB에 저장하지 않는다. 웹 통합 테스트는 실제 HTML fixture를 네트워크 응답으로 주입하므로 Android fetch·TLS·네이티브 해시 검증을 대신하지 않는다.
 
 ## 3 설정과 비밀 정보
 

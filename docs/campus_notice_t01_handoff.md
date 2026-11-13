@@ -10,10 +10,10 @@
 - [x] 타입 검사와 공통 계약 테스트.
 - [x] Android JavaScript/Hermes 번들 export.
 - [x] 웹 UI 통합 검증: 탭 이동·관심 저장/해제·상세·잘못된 ID 복귀.
-- [ ] Android 실기기 실행: 사용자가 현재 확인이 어렵다고 하여 보류.
+- [x] Android 실기기 실행: 2026-11-13 사용자가 홈·찾기·상세 이동과 관심 저장·해제 확인 완료.
 - [ ] A·B의 계약·소유권 검토: 팀원 확인 필요.
 
-실기기 실행이 남아 있으므로 T01의 모든 현장 확인이 끝났다고 표현하지 않는다. Android 번들은 APK가 아니며, 웹 확인은 Android 실기기 확인을 대신하지 않는다.
+실기기 기본 동작은 사용자 확인으로 완료했으며 A·B의 계약·소유권 검토는 별도 항목으로 남아 있다. Android 번들은 APK가 아니며, 웹 확인은 Android 실기기 확인을 대신하지 않는다.
 
 ## 2 버전과 실행
 
@@ -71,7 +71,7 @@ npm run test:e2e
 
 T01 초기 검증 결과: Node.js 24.22.3에서 타입·포맷 검사, 계약 테스트 22개, UI 통합 테스트 2개, Android·웹 번들 생성 통과. 브라우저 다운로드 CDN이 응답하지 않아 이번 UI 검증은 별도 설치한 Chromium 경로를 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`에 지정해 수행했다. 일반 개발 환경에서는 위의 Playwright 기본 설치 명령을 사용한다.
 
-SDK 58 전환 재검증(2026-11-13): Node.js 24.22.3에서 `npm ci`, Expo Doctor 20개 검사, 타입·포맷 검사, 계약 테스트 22개, Android·웹 번들 생성, 웹 UI 테스트 2개를 통과했다. 웹 테스트는 `/tmp/chromium`을 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`로 지정했다. SDK 58 Router가 비활성 화면을 `inert` 상태로 DOM에 유지하므로 공통 링크와 관심 해제 버튼의 테스트 선택자는 활성 화면으로 한정했다. Android Expo Go 실기기 실행은 여전히 미검증이다.
+SDK 58 전환 재검증(2026-11-13): Node.js 24.22.3에서 `npm ci`, Expo Doctor 20개 검사, 타입·포맷 검사, 계약·수집 테스트 42개, Android·웹 번들 생성, 웹 UI 테스트 3개를 통과했다. 웹 테스트는 `/tmp/chromium`을 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`로 지정했다. SDK 58 Router가 비활성 화면을 `inert` 상태로 DOM에 유지하므로 공통 링크와 관심 해제 버튼의 테스트 선택자는 활성 화면으로 한정했다. 이후 Android Expo Go 실기기 기본 동작도 사용자가 확인 완료했다. 상세 결과는 [T02 실기기 확인 기록](campus_notice_t02_handoff.md#5-android-실기기-확인-기록)을 참고한다.
 
 아래는 390×844 웹 뷰포트에서 캡처한 화면이며 Android 실기기 캡처가 아니다.
 

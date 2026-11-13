@@ -18,8 +18,7 @@
     "shared/**/*.ts",
     "fixtures/**/*.ts",
     "tests/**/*.ts",
-    "expo-env.d.ts",
     "playwright.config.ts",
-    ".expo/types/**/*.ts"
+    "scripts/**/*.ts"
   ]
 }

@@ -1,0 +1,56 @@
+[
+  {
+    "file": "general_list.html",
+    "sourceUrl": "https://www.seoultech.ac.kr/service/info/notice",
+    "capturedAt": "2026-11-13T11:52:00.831658Z",
+    "sha256": "4ba42615d963624a98407617522766bc427f8641c30464a91e389078ba820b63",
+    "bytes": 71402,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  },
+  {
+    "file": "cs_list.html",
+    "sourceUrl": "https://computer.seoultech.ac.kr/info/notice",
+    "capturedAt": "2026-11-13T11:52:01.150662Z",
+    "sha256": "46aa150e46ffe897842b6480cfe19fcb32157d5867c45fb4d48fad0a4fffaa15",
+    "bytes": 37274,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  },
+  {
+    "file": "general_detail.html",
+    "sourceUrl": "https://www.seoultech.ac.kr/service/info/notice?do=commonview&bnum=4691&bidx=897750",
+    "capturedAt": "2026-11-13T11:53:23.765594Z",
+    "sha256": "5e250e187d7c657ace28632be31e60003895dee6b894b49f6e9c54fe492c8717",
+    "bytes": 58352,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  },
+  {
+    "file": "cs_detail.html",
+    "sourceUrl": "https://computer.seoultech.ac.kr/info/notice?do=view&bnum=58476&bidx=897737",
+    "capturedAt": "2026-11-13T11:53:23.834595Z",
+    "sha256": "1639891d0d0471d3ff76fb570b374ea1de7a04d004e2e49db3d48ffbbbdaa1f9",
+    "bytes": 28949,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  },
+  {
+    "file": "general_page2.html",
+    "sourceUrl": "https://www.seoultech.ac.kr/service/info/notice?bidx=4691&bnum=4691&allboard=false&page=2&size=15",
+    "capturedAt": "2026-11-13T11:53:24.085598Z",
+    "sha256": "39f682679913470dabf3de83e81d4274f0e91fcfca5d91a19fcd9145c9773578",
+    "bytes": 71342,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  },
+  {
+    "file": "cs_page2.html",
+    "sourceUrl": "https://computer.seoultech.ac.kr/info/notice?profboardidx=0&bidx=58476&bnum=58476&allboard=false&page=2&size=6",
+    "capturedAt": "2026-11-13T11:53:24.168599Z",
+    "sha256": "4e5509561bcfd8ff3eb2530b0273d2b38c9f8a715fc7fc0bd9eec190e5c1ec68",
+    "bytes": 36999,
+    "encoding": "UTF-8",
+    "captureMethod": "curl -L --fail; unmodified response body"
+  }
+]

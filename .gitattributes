@@ -1,0 +1,2 @@
+# 원본 응답의 CRLF·바이트 해시를 checkout 시에도 유지한다.
+fixtures/real/**/*.html -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
