@@ -45,11 +45,16 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
     page.getByRole('button', { name, exact: true });
   const openSaved = async () => {
     await page.getByRole('tab', { name: '메인', exact: true }).click();
-    await page
+    const card = page
+      .getByTestId('active-page')
       .getByText(t09Title, { exact: true })
-      .locator('..')
-      .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
-      .click();
+      .locator('..');
+    const toggle = card.getByRole('button', {
+      name: /공지 자세히 보기 ∨|상세 접기 ∧/,
+    });
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true')
+      await toggle.click();
   };
   await page.goto('/');
   await page.getByRole('tab', { name: '설정', exact: true }).click();
@@ -63,19 +68,25 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await button('전체 공지 보기').click();
   await button('실제 공지 새로고침').click();
+  await expect(
+    page.getByTestId('discover-card').getByText(t09Title, { exact: true }),
+  ).toBeVisible();
   await page
-    .getByText(t09Title, { exact: true })
-    .locator('..')
+    .getByTestId('discover-card')
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await button('관심 저장').click();
-  await button('체크하기 · 참가 신청서 준비').click();
-  await expect(button('체크됨 · 참가 신청서 준비')).toBeVisible();
+  await openSaved();
+  const checkedItem = page.getByRole('checkbox', {
+    name: '참가 신청서 준비',
+    exact: true,
+  });
+  await checkedItem.click();
+  await expect(checkedItem).toBeChecked();
   await button('준비 중으로 변경').click();
   await expect(
     page.getByText('신청 상태 · 준비 중', { exact: true }),
   ).toBeVisible();
-  await button('닫기').click();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
   await button('설정 저장').click();
@@ -85,8 +96,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
       exact: true,
     }),
   ).toBeVisible();
-  await expect(button('체크됨 · 참가 신청서 준비')).toBeVisible();
-  await button('닫기').click();
+  await expect(checkedItem).toBeChecked();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('3학년').click();
   await button('설정 저장').click();
@@ -102,7 +112,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await expect(
     page.getByText(/이전 분석 · 업데이트 확인 중/).last(),
   ).toBeVisible();
-  await expect(button('체크됨 · 참가 신청서 준비')).toBeVisible();
+  await expect(checkedItem).toBeChecked();
   await expect(
     page.getByText('신청 상태 · 준비 중', { exact: true }),
   ).toBeVisible();
@@ -116,7 +126,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByText(/준비물이 변경되었어요/)).toBeVisible();
+  await expect(page.getByText(/체크리스트가 변경되었어요/)).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('t09_changed_detail.png'),
     fullPage: true,
@@ -125,13 +135,13 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await page.reload();
   await openSaved();
   await expect(button('마감 변경 확인')).toBeVisible();
-  await expect(button('체크됨 · 참가 신청서 준비')).toBeVisible();
+  await expect(checkedItem).toBeChecked();
   await button('마감 변경 확인').click();
   await expect(button('마감 변경 확인')).toHaveCount(0);
   await page.reload();
   await openSaved();
   await expect(button('마감 변경 확인')).toHaveCount(0);
-  await expect(button('체크됨 · 참가 신청서 준비')).toBeVisible();
+  await expect(checkedItem).toBeChecked();
   expect(calls).toEqual(callsBeforeReload);
   expect(errors).toEqual([]);
 });

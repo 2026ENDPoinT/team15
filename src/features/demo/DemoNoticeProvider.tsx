@@ -33,6 +33,7 @@ import { analysisAccess } from '../../platform/analysisAccess';
 import { createAnalysisClient } from '../../services/analysisClient';
 import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
 import { toNoticeCard } from './noticeReadModel';
+import type { NotificationSnapshot } from './noticeDetailPresentation';
 
 const dataListeners = new Set<() => Promise<void>>();
 let currentKeywords = ['대회', '장학금'];
@@ -171,6 +172,23 @@ function getRepository() {
 }
 
 async function readState(repository: Repository) {
+  let notificationSnapshot: NotificationSnapshot = {
+    status: 'unsupported',
+    allowed: false,
+    scheduled: [],
+  };
+  if (deadlineNotifications) {
+    try {
+      const [allowed, scheduled] = await Promise.all([
+        deadlineNotifications.isAllowed(),
+        deadlineNotifications.listScheduled(),
+      ]);
+      notificationSnapshot = { status: 'available', allowed, scheduled };
+    } catch {
+      notificationSnapshot = { status: 'error', allowed: false, scheduled: [] };
+    }
+  }
+  const reminders = await repository.listReminders();
   const home = await repository.getHomeModel();
   const checklist = await repository.getChecklist(demoNotice.id);
   const records = await repository.listNoticeRecords();
@@ -185,6 +203,8 @@ async function readState(repository: Repository) {
   return {
     home,
     reminderWarning,
+    reminders,
+    notificationSnapshot,
     notices: entries
       .flatMap(({ record, detail }) =>
         detail ? [toNoticeCard(record, detail)] : [],
@@ -218,6 +238,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   refreshNotices(): Promise<void>;
   analyzeNotice(id: string): Promise<void>;
   setKeywords(keywords: string[]): void;
+  refreshReminders(): Promise<void>;
   notice: typeof demoNotice;
   testNotification: (() => Promise<boolean>) | null;
   reservationStatus: ((enable: boolean) => Promise<number>) | null;
@@ -260,7 +281,10 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
     dataListeners.add(reload);
     function reconcile() {
       void getRepository()
-        .then(({ actions }) => actions.reconcileReminders())
+        .then(async ({ actions }) => {
+          await actions.reconcileReminders();
+          await reload();
+        })
         .catch(() => undefined);
     }
     const subscription = AppState.addEventListener('change', (state) => {
@@ -385,10 +409,22 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
           currentKeywords = keywords;
         },
         actions,
+        refreshReminders: async () => {
+          const { repository, actions } = await getRepository();
+          try {
+            await actions.reconcileReminders();
+          } finally {
+            await reloadState(repository);
+          }
+        },
         reservationStatus: deadlineNotifications
           ? async (enable) => {
-              const { reservationStatus } = await getRepository();
-              return (await reservationStatus?.(enable)) ?? 0;
+              const { repository, reservationStatus } = await getRepository();
+              try {
+                return (await reservationStatus?.(enable)) ?? 0;
+              } finally {
+                await reloadState(repository);
+              }
             }
           : null,
         testNotification: deadlineNotifications
