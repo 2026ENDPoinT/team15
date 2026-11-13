@@ -241,7 +241,7 @@ function SwipeCard({
                 <Button label="← 버리기" onPress={() => act('discard')} />
               )}
               {bucket === 'dismissed' ? (
-                <Button label="<-삭제" onPress={() => act('delete')} />
+                <Button label="← 삭제" onPress={() => act('delete')} />
               ) : (
                 <Button label="↕ 보류" onPress={() => act('hold')} />
               )}

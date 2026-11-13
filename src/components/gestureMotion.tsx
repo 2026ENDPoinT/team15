@@ -89,10 +89,10 @@ export function useCardMotion(
     .onFinalize((_, success) => {
       if (!success) runOnJS(onCancel)();
     });
-  // Saved cards claim horizontal drags only; vertical movement must fail
-  // before activation so the surrounding ScrollView can take over.
+  // Main and trash cards require a deliberate horizontal drag. Yield early
+  // to vertical scrolling instead of claiming small diagonal movements.
   if (direction !== 'all')
-    gesture.activeOffsetX([-16, 16]).failOffsetY([-12, 12]);
+    gesture.activeOffsetX([-36, 36]).failOffsetY([-8, 8]);
   if (page) gesture.blocksExternalGesture(page);
   if (scroll) gesture.blocksExternalGesture(scroll);
   const style = useAnimatedStyle(() => ({
