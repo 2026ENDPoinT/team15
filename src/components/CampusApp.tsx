@@ -45,6 +45,7 @@ import {
   type College,
   type CampusProfile,
 } from '../domain/campusProfile';
+import { recruitmentEnded } from '../domain/dates';
 import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
@@ -245,6 +246,9 @@ export default function CampusApp() {
     syncStatus,
     reminderWarning,
     refreshNotices,
+    demoNewNoticeId,
+    demoStatus,
+    refreshDemoNotice,
     analyzeNotice,
     profile,
     saveProfile,
@@ -273,6 +277,11 @@ export default function CampusApp() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const cardTouchLocked = useRef(false);
+  const [minute, setMinute] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setMinute((value) => value + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [picked, setPicked] = useState<string | null>(null);
@@ -452,9 +461,23 @@ export default function CampusApp() {
   );
 
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
+  const endedNoticeIds = new Set(
+    notices
+      .filter((notice) => {
+        const detail = details[notice.id];
+        return recruitmentEnded(
+          notice.title,
+          detail?.analysisFresh ? (detail.analysis?.data.events ?? []) : [],
+          now,
+        );
+      })
+      .map(({ id }) => id),
+  );
   const events = home.schedule.filter(
     (event) =>
-      event.date.startsWith(prefix) && (!picked || event.date === picked),
+      !endedNoticeIds.has(event.noticeId) &&
+      event.date.startsWith(prefix) &&
+      (!picked || event.date === picked),
   );
   const [detailUpdating, setDetailUpdating] = useState(false);
   const [detailErrors, setDetailErrors] = useState<Record<string, boolean>>({});
@@ -758,6 +781,7 @@ export default function CampusApp() {
                           page === pageRef.current ? held : null,
                           profile,
                           page === 1 ? showAll : null,
+                          minute,
                           actions,
                           analyzeNotice,
                           page === 2 ? month : null,
@@ -766,6 +790,9 @@ export default function CampusApp() {
                           page === 1 ? syncState : null,
                           page === 1 ? syncStatus : null,
                           page === 1 ? refreshNotices : null,
+                          page === 1 || page === 2 ? demoNewNoticeId : null,
+                          page === 1 ? refreshDemoNotice : null,
+                          page === 1 ? demoStatus : null,
                         ]),
                   ]}
                   render={() => {
@@ -778,6 +805,8 @@ export default function CampusApp() {
                     const visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
+                        ((page === 1 || page === 2) &&
+                          endedNoticeIds.has(notice.id)) ||
                         (page === pageRef.current && held.includes(notice.id))
                       )
                         return false;
@@ -801,6 +830,17 @@ export default function CampusApp() {
                         )
                       );
                     });
+                    const nextNotice =
+                      visible.find(
+                        ({ id }) => page === 1 && id === demoNewNoticeId,
+                      ) ?? visible[0];
+                    const demoPreview =
+                      page === 2 &&
+                      demoNewNoticeId &&
+                      !endedNoticeIds.has(demoNewNoticeId) &&
+                      buckets[demoNewNoticeId] === 'unseen'
+                        ? notices.find(({ id }) => id === demoNewNoticeId)
+                        : undefined;
                     if (page === 2) {
                       const priority = { preparing: 0, saved: 1, applied: 2 };
                       visible.sort((a, b) => {
@@ -815,7 +855,6 @@ export default function CampusApp() {
                         return rank(a.id) - rank(b.id);
                       });
                     }
-                    const nextNotice = visible[0];
                     return (
                       <View
                         key={page}
@@ -867,6 +906,12 @@ export default function CampusApp() {
                                   void refreshNotices();
                               }}
                             />
+                            {refreshDemoNotice && (
+                              <Button
+                                label="시연 공지 새로고침"
+                                onPress={() => void refreshDemoNotice()}
+                              />
+                            )}
                             <Button
                               label={showAll ? '맞춤 보기' : '전체 공지 보기'}
                               onPress={() => setShowAll(!showAll)}
@@ -899,6 +944,14 @@ export default function CampusApp() {
                                   : ''}
                               </Text>
                             ))}
+                            {!!demoStatus && (
+                              <Text
+                                accessibilityLiveRegion="polite"
+                                style={s.reason}
+                              >
+                                {demoStatus}
+                              </Text>
+                            )}
                             {!!syncStatus.message && (
                               <Text style={s.reason}>{syncStatus.message}</Text>
                             )}
@@ -932,6 +985,7 @@ export default function CampusApp() {
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                isNew={nextNotice.id === demoNewNoticeId}
                                 eligibilityLabel={
                                   eligibilityLabels[
                                     eligibility[nextNotice.id]!.result
@@ -998,6 +1052,24 @@ export default function CampusApp() {
                                 ][page]
                               }
                             </Text>
+                            {demoPreview && (
+                              <View style={s.card}>
+                                <Text style={s.tag}>새 맞춤 공지 · 시연</Text>
+                                <Text
+                                  accessibilityRole="header"
+                                  style={s.section}
+                                >
+                                  {demoPreview.title}
+                                </Text>
+                                <Text style={s.description}>
+                                  {demoPreview.summary}
+                                </Text>
+                                <Button
+                                  label="맞춤 공지에서 보기"
+                                  onPress={() => navigate(1)}
+                                />
+                              </View>
+                            )}
                             {page === 2 && (
                               <View style={s.card}>
                                 <View style={s.between}>
@@ -1096,7 +1168,10 @@ export default function CampusApp() {
                                               String(i + 1).padStart(2, '0');
 
                                             const hasEvent = home.schedule.some(
-                                              (event) => event.date === date,
+                                              (event) =>
+                                                !endedNoticeIds.has(
+                                                  event.noticeId,
+                                                ) && event.date === date,
                                             );
                                             return (
                                               <Pressable

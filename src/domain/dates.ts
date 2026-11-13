@@ -49,3 +49,36 @@ export function reminderFireAt(
   const fireAt = Date.parse(deadline.date) - dayMs;
   return fireAt > now.getTime() ? new Date(fireAt).toISOString() : null;
 }
+
+export function recruitmentEnded(
+  title: string,
+  events: ExtractedEvent[],
+  now: Date,
+): boolean {
+  const normalized = normalizeText(title).normalize('NFKC');
+  // A standalone status or an explicit recruitment label, not a mention of a
+  // program's end date or a future deadline.
+  if (
+    /[(\[]\s*(?:(?:신청|접수|모집)\s*)?(?:마감|종료)(?:\s*완료)?\s*[)\]]\s*$/.test(
+      normalized,
+    ) ||
+    /^(?:\[|\()\s*(?:(?:신청|접수|모집)\s*)?(?:마감|종료)(?:\s*완료)?\s*(?:\]|\))/.test(
+      normalized,
+    ) ||
+    /(?:^|\s|[-–—])(?:모집|신청|접수)\s*(?:마감|종료)(?:\s*완료)?[.!]?\s*$/.test(
+      normalized,
+    ) ||
+    /[-–—]\s*(?:마감|종료)[.!]?\s*$/.test(normalized)
+  )
+    return true;
+
+  const deadlines = events.filter(
+    (event) => event.type === 'application_close',
+  );
+  return (
+    deadlines.length > 0 &&
+    deadlines.every(
+      (event) => event.status === 'resolved' && describeDate(event, now).ended,
+    )
+  );
+}
