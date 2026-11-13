@@ -2,9 +2,29 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detailReviewNotes,
+  detailEventLabel,
   deadlineReminderLabel,
   type NotificationSnapshot,
 } from '../src/features/demo/noticeDetailPresentation';
+import { normalNoticeFixture } from '../fixtures/synthetic/notices';
+
+test('미확정 일정의 원문 월·일·시각과 후보 날짜를 숨기지 않는다', () => {
+  const event = {
+    ...normalNoticeFixture.analysis.data.events[0]!,
+    status: 'needs_review' as const,
+    date: null,
+    evidence: '신청: 11월 20일 오후 6시',
+  };
+  assert.match(detailEventLabel(event), /11월 20일 오후 6시.*확인 필요/);
+  assert.match(
+    detailEventLabel({ ...event, date: '2026-11-20' }),
+    /후보 2026-11-20.*확인 필요/,
+  );
+  assert.equal(
+    detailEventLabel(normalNoticeFixture.analysis.data.events[0]!),
+    '신청 마감 · 2026-11-20 18:00',
+  );
+});
 
 test('첨부 기본 안내만 합치고 날짜 및 구체적인 제출 조건은 유지한다', () => {
   const notes = detailReviewNotes(

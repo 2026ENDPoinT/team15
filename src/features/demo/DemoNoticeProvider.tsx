@@ -32,7 +32,11 @@ import { toAnalyzeNoticeRequest } from '../../../shared/mappers';
 import { analysisAccess } from '../../platform/analysisAccess';
 import { createAnalysisClient } from '../../services/analysisClient';
 import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
-import { toNoticeCard } from './noticeReadModel';
+import {
+  getAnalysisProgress,
+  isNoticeCardReady,
+  toNoticeCard,
+} from './noticeReadModel';
 import type { NotificationSnapshot } from './noticeDetailPresentation';
 
 const dataListeners = new Set<() => Promise<void>>();
@@ -205,9 +209,12 @@ async function readState(repository: Repository) {
     reminderWarning,
     reminders,
     notificationSnapshot,
+    analysisProgress: getAnalysisProgress(records),
     notices: entries
       .flatMap(({ record, detail }) =>
-        detail ? [toNoticeCard(record, detail)] : [],
+        detail && isNoticeCardReady(record)
+          ? [toNoticeCard(record, detail)]
+          : [],
       )
       .sort(
         (a, b) =>
@@ -236,6 +243,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   saveAnalysisToken(token: string): Promise<void>;
   clearAnalysisToken(): Promise<void>;
   refreshNotices(): Promise<void>;
+  analyzePendingNotices(): Promise<void>;
   analyzeNotice(id: string): Promise<void>;
   setKeywords(keywords: string[]): void;
   refreshReminders(): Promise<void>;
@@ -401,6 +409,9 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
         },
         refreshNotices: async () => {
           await (await getRepository()).sync.refreshNotices('manual');
+        },
+        analyzePendingNotices: async () => {
+          await (await getRepository()).sync.analyzePendingNotices();
         },
         analyzeNotice: async (id) => {
           await (await getRepository()).sync.analyzeNotice(id);

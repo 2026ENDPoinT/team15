@@ -67,6 +67,7 @@ export async function analyzeNotice(
                   text: JSON.stringify({
                     title: input.title,
                     body_text: input.body_text,
+                    published_date: input.published_date ?? null,
                     extracted_links: input.extracted_links,
                     attachments: input.attachments,
                     has_body_images: input.has_body_images,

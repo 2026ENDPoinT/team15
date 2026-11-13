@@ -37,6 +37,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByTestId('discover-card')
     .getByRole('button', { name: '← 버리기', exact: true })
     .click();
+  await expect(scholarship).toHaveCount(0);
   await navigateTo('휴지통');
   await expect(scholarship).toBeVisible();
   await page.screenshot({
@@ -52,6 +53,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByTestId('discover-card')
     .getByRole('button', { name: '선택 →', exact: true })
     .click();
+  await expect(scholarship).toHaveCount(0);
   await navigateTo('메인');
   await expect(scholarship).toBeVisible();
   const detailCard = page

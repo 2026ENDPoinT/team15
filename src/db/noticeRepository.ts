@@ -443,11 +443,18 @@ export async function createNoticeRepository(
              content_hash = excluded.content_hash,
              fetched_at = excluded.fetched_at,
              published_date = excluded.published_date,
+             analysis_json = CASE WHEN notices.published_date IS NOT excluded.published_date
+               THEN NULL ELSE notices.analysis_json END,
+             analyzed_content_hash = CASE WHEN notices.published_date IS NOT excluded.published_date
+               THEN NULL ELSE notices.analyzed_content_hash END,
              analysis_status = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN 'pending' ELSE notices.analysis_status END,
              analysis_request_id = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN NULL ELSE notices.analysis_request_id END,
              last_error = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN NULL ELSE notices.last_error END
            WHERE julianday(excluded.fetched_at) >= julianday(notices.fetched_at)`,
           [

@@ -19,6 +19,7 @@ export function toAnalyzeNoticeRequest(
     extractor_version: extractorVersion,
     title: notice.title,
     body_text: notice.bodyText,
+    published_date: notice.publishedDate,
     source_url: notice.sourceUrl,
     extracted_links: notice.extractedLinks,
     attachments: notice.attachments,

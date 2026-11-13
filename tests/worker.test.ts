@@ -5,6 +5,7 @@ import {
   analysisEnvelopeSchema,
   apiErrorSchema,
   MAX_REQUEST_BYTES,
+  EXTRACTOR_VERSION,
 } from '../shared/contracts';
 import { hashNoticeContent } from '../shared/canonicalize';
 import { hashProbe, hashProbeExpected } from '../src/sources/smoke';
@@ -113,8 +114,10 @@ test('정상 요청: 서버 봉투·해시·시각과 검증된 토큰별 제한
         'body_text',
         'extracted_links',
         'has_body_images',
+        'published_date',
         'title',
       ]);
+      assert.equal(content.published_date, normalInput.published_date);
       return providerResponse();
     },
   });
@@ -124,7 +127,7 @@ test('정상 요청: 서버 봉투·해시·시각과 검증된 토큰별 제한
   assert.equal(result.analyzed_at, now().toISOString());
   assert.equal(result.notice_id, normalInput.notice_id);
   assert.equal(result.content_hash, normalInput.content_hash);
-  assert.equal(result.extractor_version, 'e1');
+  assert.equal(result.extractor_version, EXTRACTOR_VERSION);
   assert.deepEqual(result.data, normalOutput);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
   assert.equal(response.headers.get('X-Request-Id'), 'test-request-id');
@@ -348,7 +351,10 @@ test('잘못된 JSON·UTF-8·개인정보·해시·스킴을 거절한다', asyn
 
 test('schema·extractor 불일치는 409로 반환한다', async () => {
   const h = await harness();
-  for (const patch of [{ schema_version: '1.0' }, { extractor_version: 'e2' }])
+  for (const patch of [
+    { schema_version: '1.0' },
+    { extractor_version: 'unsupported' },
+  ])
     await expectError(
       await h.worker.fetch(h.request({ ...normalInput, ...patch }), h.env),
       409,

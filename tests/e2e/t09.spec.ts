@@ -108,16 +108,29 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await expect(
     page.getByText('공지 갱신 대기 중', { exact: true }),
   ).toBeVisible();
-  await openSaved();
   await expect(
-    page.getByText(/이전 분석 · 업데이트 확인 중/).last(),
+    page.getByText('분석 완료 0 / 1건', { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText('분석 중 0건 · 대기 0건 · 실패 1건 · 분석 불가 0건', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  await expect(
+    page.getByTestId('active-page').getByText(t09Title, { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  failAI = false;
+  await button('남은 공지 분석').click();
+  await expect(
+    page.getByText('분석 완료 1 / 1건', { exact: true }),
+  ).toBeVisible();
+  await openSaved();
   await expect(checkedItem).toBeChecked();
   await expect(
     page.getByText('신청 상태 · 준비 중', { exact: true }),
   ).toBeVisible();
-  failAI = false;
-  await button('분석 다시 시도').click();
   await expect(
     page.getByText('신청 마감 · 2026-11-23 18:00', { exact: true }),
   ).toBeVisible();

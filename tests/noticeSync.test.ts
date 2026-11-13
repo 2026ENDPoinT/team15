@@ -70,7 +70,11 @@ test('실제 HTML 두 출처 → HTTP 클라이언트 → SQLite → 체크·일
           ({ envelope }) => envelope.notice_id === request.notice_id,
         )!;
         assert.equal(captured.envelope.content_hash, request.content_hash);
-        return Response.json(captured.envelope);
+        // e1 실제 기록을 현재 계약에 맞춰 재생하는 mock이며 새 모델 검증이 아니다.
+        return Response.json({
+          ...captured.envelope,
+          extractor_version: request.extractor_version,
+        });
       },
     });
     const sync = createNoticeSync({
@@ -466,5 +470,109 @@ test('v1 migration과 재실행 복구는 저장 기록을 보존하고 running�
   } finally {
     db.close();
     rmSync(directory, { recursive: true });
+  }
+});
+
+test('e1 캐시는 e2에서 재분석하고 게시일 변경도 작업·캐시를 무효화하며 체크 기록은 보존한다', async () => {
+  const { db, repository } = await openNodeNoticeRepository();
+  try {
+    const { analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(normal);
+    await repository.applyAnalysis(analysis);
+    await repository.saveNotice(normal.id);
+    const item = (await repository.getChecklist(normal.id)).items[0]!;
+    await repository.setChecklistCompleted(item.id, true);
+    const old = { ...analysis, extractor_version: 'e1' };
+    db.prepare(
+      "UPDATE notices SET analysis_json = ?, extractor_version = 'e1' WHERE id = ?",
+    ).run(JSON.stringify(old), normal.id);
+    assert.equal(
+      (await repository.getNoticeDetail(normal.id))!.analysisFresh,
+      false,
+    );
+    assert.deepEqual((await repository.getHomeModel()).schedule, []);
+    const request = {
+      noticeId: normal.id,
+      contentHash: normal.contentHash,
+      requestId: 'upgrade',
+    };
+    assert.equal(await repository.beginAnalysis(request), true);
+    assert.equal(await repository.applyAnalysis(old, request), false);
+    assert.equal(await repository.applyAnalysis(analysis, request), true);
+    assert.equal(
+      (await repository.getNoticeDetail(normal.id))!.analysisFresh,
+      true,
+    );
+
+    await repository.upsertRawNotice({
+      ...normal,
+      publishedDate: '2026-11-12',
+    });
+    assert.equal(
+      (await repository.getNoticeDetail(normal.id))!.analysisFresh,
+      false,
+    );
+    assert.deepEqual((await repository.getHomeModel()).schedule, []);
+    const pending = { ...request, requestId: 'publication-change' };
+    assert.equal(await repository.beginAnalysis(pending), true);
+    await repository.upsertRawNotice({
+      ...normal,
+      publishedDate: '2026-11-11',
+    });
+    assert.equal(await repository.applyAnalysis(analysis, pending), false);
+    const latest = { ...request, requestId: 'latest-publication' };
+    assert.equal(await repository.beginAnalysis(latest), true);
+    assert.equal(await repository.applyAnalysis(analysis, latest), true);
+    const preserved = (await repository.getChecklist(normal.id)).items.find(
+      ({ id }) => id === item.id,
+    )!;
+    assert.equal(preserved.completed, true);
+  } finally {
+    db.close();
+  }
+});
+
+test('숨긴 미분석 공지는 키워드가 없어도 순차 분석하고 남은 분석은 재수집 없이 이어간다', async () => {
+  const { db, repository } = await openNodeNoticeRepository();
+  try {
+    const records = Array.from({ length: 12 }, (_, index) => ({
+      ...normal,
+      id: `seoultech_cs:58476:${200 + index}`,
+      postId: String(200 + index),
+    }));
+    let calls = 0;
+    let collections = 0;
+    const sync = createNoticeSync({
+      repository,
+      randomUUID,
+      collector: { sha256: nodeSha256 },
+      keywords: () => [],
+      collectSource: async (...args) => {
+        collections++;
+        return source(records)(...args);
+      },
+      analyze: async (request) => {
+        calls++;
+        return {
+          ...normalNoticeFixture.analysis,
+          notice_id: request.notice_id,
+        };
+      },
+    });
+    await sync.refreshNotices('manual');
+    assert.equal(calls, 10);
+    const continuation = sync.analyzePendingNotices();
+    assert.equal(sync.analyzePendingNotices(), continuation);
+    await continuation;
+    assert.equal(calls, 12);
+    assert.equal(collections, 2);
+    assert.equal(sync.getStatus().phase, 'idle');
+    assert.ok(
+      (await repository.listNoticeRecords()).every(
+        (record) => record.analysisFresh,
+      ),
+    );
+  } finally {
+    db.close();
   }
 });
