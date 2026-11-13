@@ -233,14 +233,14 @@ function SwipeCard({
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="<- 선택 취소" onPress={() => act('unselect')} />
+            <Button label="← 선택 취소" onPress={() => act('unselect')} />
           ) : (
             <>
               {bucket === 'unseen' && (
                 <Button label="← 버리기" onPress={() => act('discard')} />
               )}
               {bucket === 'dismissed' ? (
-                <Button label="<-삭제" onPress={() => act('delete')} />
+                <Button label="← 삭제" onPress={() => act('delete')} />
               ) : (
                 <Button label="↕ 보류" onPress={() => act('hold')} />
               )}
