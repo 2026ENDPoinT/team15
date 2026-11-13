@@ -4,12 +4,15 @@ import { useCardMotion } from './gestureMotion';
 import { useCardTouchLock } from './useCardTouchLock';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Notice } from '../features/demo/campusNotices';
 
 type Action = 'discard' | 'hold' | 'select';
@@ -82,7 +85,7 @@ export default function DiscoverCard({
     );
   };
   const motion = useCardMotion(
-    !busy,
+    !busy && !expanded,
     touchLock.startDrag,
     (dx, dy) => {
       if (Math.abs(dx) >= 56) perform(dx > 0 ? 'select' : 'discard');
@@ -143,13 +146,12 @@ export default function DiscoverCard({
             accessibilityState={{ expanded }}
             aria-expanded={expanded}
             onPress={() => {
-              setExpanded((old) => !old);
+              reset();
+              setExpanded(true);
             }}
             style={styles.detailToggle}
           >
-            <Text style={styles.link}>
-              {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
-            </Text>
+            <Text style={styles.link}>공지 자세히 보기 ↗</Text>
           </Pressable>
           <View style={styles.actions}>
             {(
@@ -175,7 +177,6 @@ export default function DiscoverCard({
               </Pressable>
             ))}
           </View>
-          {expanded && detailContent}
         </Reanimated.View>
       </GestureDetector>
       {remainingCount > 0 && (
@@ -183,11 +184,59 @@ export default function DiscoverCard({
           다음 공지 {remainingCount}개가 기다리고 있어요
         </Text>
       )}
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        onRequestClose={() => setExpanded(false)}
+      >
+        <SafeAreaView style={styles.detailScreen}>
+          <View style={styles.detailHeader}>
+            <Text style={styles.detailHeading}>공지 상세</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="닫기"
+              onPress={() => setExpanded(false)}
+              style={styles.closeButton}
+            >
+              <Text style={styles.link}>닫기</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            testID="notice-sheet-content"
+            style={styles.detailScroll}
+            contentContainerStyle={styles.detailContent}
+          >
+            <Text style={styles.muted}>{notice.org}</Text>
+            <Text accessibilityRole="header" style={styles.title}>
+              {notice.title}
+            </Text>
+            {expanded && detailContent}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dfe5d9',
+  },
+  detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
+  closeButton: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailScroll: { flex: 1 },
+  detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
   deck: { flexShrink: 1, minHeight: 0 },
   stackCard: {
     position: 'absolute',

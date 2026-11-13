@@ -28,6 +28,14 @@ test('맞춤 공지는 한 장씩 처리하고 스크롤 없이 표시하고 상
   await card.getByRole('button', { name: '공지 자세히 보기 ↗' }).click();
   const sheet = page.getByTestId('notice-sheet-content');
   await expect(sheet.getByTestId(/^notice-detail-/)).toBeVisible();
+  for (const label of ['신청 대상', '주요 일정', '신청 방법·제출 서류']) {
+    await expect(sheet.getByText(label, { exact: true })).toBeVisible();
+  }
+  await expect(sheet.getByText('상세 내용', { exact: true })).toHaveCount(0);
+  await expect
+    .poll(async () => (await sheet.boundingBox())!.y)
+    .toBeLessThan(100);
+  expect((await card.boundingBox())!.height).toBe(originalHeight);
   await sheet.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
