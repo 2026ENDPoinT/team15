@@ -8,6 +8,7 @@ export type Notice = {
   tags: string[];
   date: string | null;
   time: string | null;
+  scheduleText?: string | null;
   summary: string;
   synthetic?: boolean;
   analysisLabel?: string;

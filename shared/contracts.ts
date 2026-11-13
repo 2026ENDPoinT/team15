@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const SCHEMA_VERSION = '1.1';
-export const EXTRACTOR_VERSION = 'e1';
+export const EXTRACTOR_VERSION = 'e2';
 export const SUPPORTED_TIMEZONE = 'Asia/Seoul';
 export const MAX_BODY_CHARACTERS = 20_000;
 export const MAX_LINKS = 30;
@@ -155,6 +155,8 @@ export const analyzeNoticeRequestSchema = z.strictObject({
   title: nonBlank,
   // 이미지 중심 공지도 표현할 수 있도록 빈 본문을 허용한다.
   body_text: z.string().max(MAX_BODY_CHARACTERS),
+  // 연도 추정의 보조 근거이며 확정 일정의 근거로 사용하지 않는다.
+  published_date: dateSchema.nullable().optional(),
   source_url: httpUrlSchema,
   extracted_links: z.array(extractedLinkSchema).max(MAX_LINKS),
   attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS),

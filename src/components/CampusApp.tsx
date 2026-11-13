@@ -45,12 +45,23 @@ import {
   type College,
   type CampusProfile,
 } from '../domain/campusProfile';
+import {
+  attendanceFollowUpEnded,
+  gatheringEnded,
+  recruitmentEnded,
+} from '../domain/dates';
 import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
 import { AnalysisSettings } from './AnalysisSettings';
-import { deadlineReminderLabel } from '../features/demo/noticeDetailPresentation';
+import { NotificationSettings } from './NotificationSettings';
+import { developerToolsEnabled } from '../features/verification/developerTools';
+import {
+  detailReviewNotes,
+  detailEventLabel,
+  deadlineReminderLabel,
+} from '../features/demo/noticeDetailPresentation';
 
 import type { Disposition as Bucket } from '../../shared/contracts';
 import { evaluateEligibility } from '../domain/eligibility';
@@ -193,6 +204,14 @@ function SwipeCard({
               </Text>
             )}
           </View>
+          <Text style={s.muted}>{notice.org}</Text>
+          <Text style={s.tag}>
+            {notice.date
+              ? `${notice.date.slice(5).replace('-', '.')} 마감`
+              : notice.scheduleText
+                ? '추출 일정 있음'
+                : '일정 미정'}
+          </Text>
         </View>
         <Text style={s.cardTitle}>{notice.title}</Text>
         <Text style={s.muted}>
@@ -211,7 +230,7 @@ function SwipeCard({
           {eligibilityLabel} ·{' '}
           {notice.date
             ? `${notice.date}${notice.time ? ` · ${notice.time} KST` : ''}`
-            : '정확한 일정은 원문에서 확인'}
+            : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
         </Text>
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
@@ -258,8 +277,6 @@ export default function CampusApp() {
     actions,
     details,
     checklists,
-    testNotification,
-    reservationStatus,
     reminders,
     notificationSnapshot,
     refreshReminders,
@@ -267,8 +284,14 @@ export default function CampusApp() {
     home,
     syncState,
     syncStatus,
+    analysisProgress,
+    hasAnalysisAccess,
+    analyzePendingNotices,
     reminderWarning,
     refreshNotices,
+    demoNewNoticeId,
+    demoStatus,
+    refreshDemoNotice,
     analyzeNotice,
     profile,
     saveProfile,
@@ -291,18 +314,54 @@ export default function CampusApp() {
   const [dept, setDept] = useState(profile.department);
   const [grade, setGrade] = useState(profile.grade);
   const [status, setStatus] = useState(profile.enrollment);
-  const savingProfile = useRef(false);
+  const saveProfileRef = useRef(saveProfile);
+  saveProfileRef.current = saveProfile;
+  const profileWrites = useRef(Promise.resolve());
+  const profileVersion = useRef(0);
+  const lastProfile = useRef(JSON.stringify(profile));
+  const [profileSaveState, setProfileSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const [profileRetry, setProfileRetry] = useState(0);
+  useEffect(() => {
+    const next: CampusProfile = {
+      college,
+      department: dept.trim(),
+      grade,
+      enrollment: status,
+      keywords: draft,
+      customKeywords: customOptions,
+    };
+    const serialized = JSON.stringify(next);
+    if (lastProfile.current === serialized && profileRetry === 0) return;
+    lastProfile.current = serialized;
+    const version = ++profileVersion.current;
+    setProfileSaveState('saving');
+    // Keep rapid edits in order so an older write cannot replace the latest one.
+    profileWrites.current = profileWrites.current
+      .then(() => saveProfileRef.current(next))
+      .then(() => {
+        if (version === profileVersion.current) setProfileSaveState('saved');
+      })
+      .catch(() => {
+        if (version === profileVersion.current) setProfileSaveState('error');
+      });
+  }, [college, dept, grade, status, draft, customOptions, profileRetry]);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const cardTouchLocked = useRef(false);
+  const [minute, setMinute] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setMinute((value) => value + 1), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [picked, setPicked] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const [message, setMessage] = useState('');
-  const [testingNotification, setTestingNotification] = useState(false);
   const scrolls = useRef<(ComponentRef<typeof ScrollView> | null)[]>([]);
   const onCardDragging = useCallback((locked: boolean) => {
     cardTouchLocked.current = locked;
@@ -476,9 +535,36 @@ export default function CampusApp() {
   );
 
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
+  const endedNoticeIds = new Set(
+    notices
+      .filter((notice) => {
+        const detail = details[notice.id];
+        const currentEvents = detail?.analysisFresh
+          ? (detail.analysis?.data.events ?? [])
+          : [];
+        return (
+          gatheringEnded(
+            notice.title,
+            detail?.raw.publishedDate ?? null,
+            now,
+            detail?.raw.bodyText,
+          ) ||
+          recruitmentEnded(notice.title, currentEvents, now) ||
+          attendanceFollowUpEnded(
+            notice.title,
+            currentEvents,
+            now,
+            detail?.raw.bodyText,
+          )
+        );
+      })
+      .map(({ id }) => id),
+  );
   const events = home.schedule.filter(
     (event) =>
-      event.date.startsWith(prefix) && (!picked || event.date === picked),
+      !endedNoticeIds.has(event.noticeId) &&
+      event.date.startsWith(prefix) &&
+      (!picked || event.date === picked),
   );
   const [detailUpdating, setDetailUpdating] = useState(false);
   const [detailErrors, setDetailErrors] = useState<Record<string, boolean>>({});
@@ -564,8 +650,7 @@ export default function CampusApp() {
                   .filter((event) => event.status === 'resolved')
                   .map((event, index) => (
                     <Text key={index} style={s.description}>
-                      {event.label} · {event.date}
-                      {event.time ? ` ${event.time}` : ''}
+                      {detailEventLabel(event)}
                     </Text>
                   ))}
               {!selectedDetail.analysis && (
@@ -675,7 +760,8 @@ export default function CampusApp() {
                   )}
                 </Text>
                 <Text style={s.muted}>
-                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요.
+                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
+                  상태이거나 예약 시각이 지났다면 예약하지 않아요.
                 </Text>
                 <Button
                   label="알림 상태 다시 확인"
@@ -733,6 +819,7 @@ export default function CampusApp() {
                     ...(page === 3
                       ? [
                           draft,
+                          profileSaveState,
                           options,
                           customOptions,
                           deletingKeywords,
@@ -745,9 +832,6 @@ export default function CampusApp() {
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
-                          testingNotification,
-                          reservationStatus,
-                          testNotification,
                         ]
                       : [
                           notices,
@@ -765,6 +849,7 @@ export default function CampusApp() {
                           page === pageRef.current ? held : null,
                           profile,
                           page === 1 ? showAll : null,
+                          minute,
                           actions,
                           analyzeNotice,
                           page === 2 ? month : null,
@@ -773,6 +858,12 @@ export default function CampusApp() {
                           page === 1 ? syncState : null,
                           page === 1 ? syncStatus : null,
                           page === 1 ? refreshNotices : null,
+                          analysisProgress,
+                          page === 1 ? hasAnalysisAccess : null,
+                          page === 1 ? analyzePendingNotices : null,
+                          page === 1 || page === 2 ? demoNewNoticeId : null,
+                          page === 1 ? refreshDemoNotice : null,
+                          page === 1 ? demoStatus : null,
                         ]),
                   ]}
                   render={() => {
@@ -785,6 +876,8 @@ export default function CampusApp() {
                     const visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
+                        ((page === 1 || page === 2) &&
+                          endedNoticeIds.has(notice.id)) ||
                         (page === pageRef.current && held.includes(notice.id))
                       )
                         return false;
@@ -808,6 +901,17 @@ export default function CampusApp() {
                         )
                       );
                     });
+                    const nextNotice =
+                      visible.find(
+                        ({ id }) => page === 1 && id === demoNewNoticeId,
+                      ) ?? visible[0];
+                    const demoPreview =
+                      page === 2 &&
+                      demoNewNoticeId &&
+                      !endedNoticeIds.has(demoNewNoticeId) &&
+                      buckets[demoNewNoticeId] === 'unseen'
+                        ? notices.find(({ id }) => id === demoNewNoticeId)
+                        : undefined;
                     if (page === 2) {
                       const priority = { preparing: 0, saved: 1, applied: 2 };
                       visible.sort((a, b) => {
@@ -822,7 +926,6 @@ export default function CampusApp() {
                         return rank(a.id) - rank(b.id);
                       });
                     }
-                    const nextNotice = visible[0];
                     return (
                       <View
                         key={page}
@@ -866,14 +969,21 @@ export default function CampusApp() {
                             <Button
                               label={
                                 syncStatus.phase === 'idle'
-                                  ? '실제 공지 새로고침'
+                                  ? '공지 새로고침'
                                   : '공지 갱신 중…'
                               }
+                              disabled={syncStatus.phase !== 'idle'}
                               onPress={() => {
                                 if (syncStatus.phase === 'idle')
                                   void refreshNotices();
                               }}
                             />
+                            {refreshDemoNotice && (
+                              <Button
+                                label="시연 공지 새로고침"
+                                onPress={() => void refreshDemoNotice()}
+                              />
+                            )}
                             <Button
                               label={showAll ? '맞춤 보기' : '전체 공지 보기'}
                               onPress={() => setShowAll(!showAll)}
@@ -883,11 +993,81 @@ export default function CampusApp() {
                               style={s.muted}
                             >
                               {syncStatus.phase === 'collecting'
-                                ? '원문 수집 중 · 수집된 공지는 바로 확인할 수 있어요.'
+                                ? '원문 수집 중 · 분석이 완료되면 공지를 표시해요.'
                                 : syncStatus.phase === 'analyzing'
-                                  ? 'AI 분석 중 · 공지를 먼저 저장할 수 있어요.'
-                                  : '공지 갱신 대기 중'}
+                                  ? 'AI 분석 중 · 완료된 공지부터 표시해요.'
+                                  : analysisProgress.waiting +
+                                        analysisProgress.failed >
+                                      0
+                                    ? '공지 갱신이 멈췄어요. 아래 안내를 확인해 주세요.'
+                                    : '공지 갱신 대기 중'}
                             </Text>
+                            {analysisProgress.total > 0 && (
+                              <View testID="analysis-progress" style={s.card}>
+                                <Text
+                                  accessibilityLiveRegion="polite"
+                                  style={s.section}
+                                >
+                                  분석 완료 {analysisProgress.completed} /{' '}
+                                  {analysisProgress.total}건
+                                </Text>
+                                <View
+                                  accessibilityRole="progressbar"
+                                  accessibilityLabel="공지 분석 진행률"
+                                  accessibilityValue={{
+                                    min: 0,
+                                    max: analysisProgress.total,
+                                    now: analysisProgress.completed,
+                                  }}
+                                  style={{
+                                    height: 6,
+                                    backgroundColor: '#e4e9df',
+                                    borderRadius: 3,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <View
+                                    style={{
+                                      height: 6,
+                                      width: `${(analysisProgress.completed / analysisProgress.total) * 100}%`,
+                                      backgroundColor: '#28634d',
+                                    }}
+                                  />
+                                </View>
+                                <Text style={s.muted}>
+                                  분석 중 {analysisProgress.running}건 · 대기{' '}
+                                  {analysisProgress.waiting}건 · 실패{' '}
+                                  {analysisProgress.failed}건 · 분석 불가{' '}
+                                  {analysisProgress.unsupported}건
+                                </Text>
+                                <Text style={s.muted}>
+                                  최신 분석이 끝난 실제 공지만 카드에 표시해요.
+                                </Text>
+                                {analysisProgress.waiting +
+                                  analysisProgress.failed >
+                                  0 &&
+                                  syncStatus.phase === 'idle' &&
+                                  (hasAnalysisAccess &&
+                                  !syncStatus.analysisBlocked ? (
+                                    <Button
+                                      label="다시 시도"
+                                      disabled={
+                                        !!syncStatus.analysisRetryAt &&
+                                        Date.parse(syncStatus.analysisRetryAt) >
+                                          Date.now()
+                                      }
+                                      onPress={() =>
+                                        void analyzePendingNotices()
+                                      }
+                                    />
+                                  ) : (
+                                    <Button
+                                      label="AI 분석 설정하기"
+                                      onPress={() => navigate(3)}
+                                    />
+                                  ))}
+                              </View>
+                            )}
                             {syncState.sources.map((source) => (
                               <Text key={source.sourceId} style={s.muted}>
                                 {source.sourceId === 'seoultech_cs'
@@ -906,6 +1086,14 @@ export default function CampusApp() {
                                   : ''}
                               </Text>
                             ))}
+                            {!!demoStatus && (
+                              <Text
+                                accessibilityLiveRegion="polite"
+                                style={s.reason}
+                              >
+                                {demoStatus}
+                              </Text>
+                            )}
                             {!!syncStatus.message && (
                               <Text style={s.reason}>{syncStatus.message}</Text>
                             )}
@@ -922,23 +1110,11 @@ export default function CampusApp() {
                                   KST
                                 </Text>
                               )}
-                            {__DEV__ && (
-                              <>
-                                <Button
-                                  label="T02 수집 검증 열기"
-                                  onPress={() => router.push('/dev/collection')}
-                                />
-                                <Button
-                                  label="T09 변경·알림 검증 열기"
-                                  onPress={() => router.push('/dev/t09')}
-                                />
-                              </>
-                            )}
-
                             {nextNotice ? (
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                isNew={nextNotice.id === demoNewNoticeId}
                                 eligibilityLabel={
                                   eligibilityLabels[
                                     eligibility[nextNotice.id]!.result
@@ -953,7 +1129,12 @@ export default function CampusApp() {
                                 <Text style={s.description}>
                                   {held.length
                                     ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                                    : '선호 키워드에 맞는 새 공지가 없어요.'}
+                                    : analysisProgress.completed <
+                                        analysisProgress.total
+                                      ? '표시할 분석 완료 공지가 없어요. 위에서 분석 진행 상황을 확인해 주세요.'
+                                      : showAll
+                                        ? '새 공지가 없어요.'
+                                        : '선호 키워드에 맞는 새 공지가 없어요.'}
                                 </Text>
                                 <Button
                                   label="키워드 수정하기 →"
@@ -1005,6 +1186,24 @@ export default function CampusApp() {
                                 ][page]
                               }
                             </Text>
+                            {demoPreview && (
+                              <View style={s.card}>
+                                <Text style={s.tag}>새 맞춤 공지 · 시연</Text>
+                                <Text
+                                  accessibilityRole="header"
+                                  style={s.section}
+                                >
+                                  {demoPreview.title}
+                                </Text>
+                                <Text style={s.description}>
+                                  {demoPreview.summary}
+                                </Text>
+                                <Button
+                                  label="맞춤 공지에서 보기"
+                                  onPress={() => navigate(1)}
+                                />
+                              </View>
+                            )}
                             {page === 2 && (
                               <View style={s.card}>
                                 <View style={s.between}>
@@ -1103,7 +1302,10 @@ export default function CampusApp() {
                                               String(i + 1).padStart(2, '0');
 
                                             const hasEvent = home.schedule.some(
-                                              (event) => event.date === date,
+                                              (event) =>
+                                                !endedNoticeIds.has(
+                                                  event.noticeId,
+                                                ) && event.date === date,
                                             );
                                             return (
                                               <Pressable
@@ -1202,7 +1404,10 @@ export default function CampusApp() {
                                           ? '휴지통이 비어 있어요.'
                                           : page === 1
                                             ? '선호 키워드에 맞는 새 공지가 없어요.'
-                                            : '아직 선택한 공지가 없어요.'}
+                                            : analysisProgress.completed <
+                                                analysisProgress.total
+                                              ? '분석 중이거나 확인이 필요한 공지는 숨겨 두었어요. 맞춤 공지에서 분석 진행 상황을 확인해 주세요.'
+                                              : '아직 선택한 공지가 없어요.'}
                                     </Text>
                                     {page !== 0 && (
                                       <Button
@@ -1222,6 +1427,7 @@ export default function CampusApp() {
                             ) : (
                               <>
                                 <AnalysisSettings />
+                                <NotificationSettings />
                                 <View style={s.card}>
                                   <Text style={s.section}>내 정보</Text>
                                   <Text style={s.muted}>소속 단과대학</Text>
@@ -1424,110 +1630,37 @@ export default function CampusApp() {
                                     </View>
                                   </View>
                                 </View>
-                                <Button
-                                  label="설정 저장"
-                                  primary
-                                  onPress={async () => {
-                                    if (savingProfile.current) return;
-                                    if (!draft.length) {
-                                      setMessage(
-                                        '선호 키워드를 하나 이상 선택해주세요.',
-                                      );
-                                      return;
-                                    }
-                                    const next: CampusProfile = {
-                                      college,
-                                      department: dept.trim(),
-                                      grade,
-                                      enrollment: status,
-                                      keywords: draft,
-                                      customKeywords: customOptions,
-                                    };
-                                    savingProfile.current = true;
-                                    try {
-                                      await saveProfile(next);
-                                      setMessage(
-                                        '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
-                                      );
-                                    } catch {
-                                      setMessage(
-                                        '설정을 저장하지 못했어요. 다시 시도해 주세요.',
-                                      );
-                                    } finally {
-                                      savingProfile.current = false;
-                                    }
-                                  }}
-                                />
-                                {testNotification && (
+                                <Text
+                                  accessibilityLiveRegion="polite"
+                                  style={s.muted}
+                                >
+                                  {profileSaveState === 'saving'
+                                    ? '설정 저장 중…'
+                                    : profileSaveState === 'error'
+                                      ? '설정을 저장하지 못했어요. 다시 시도해 주세요.'
+                                      : profileSaveState === 'saved'
+                                        ? '설정이 자동 저장됐어요.'
+                                        : '변경한 설정은 자동으로 저장돼요.'}
+                                </Text>
+                                {!draft.length && (
+                                  <Text style={s.muted}>
+                                    선호 키워드를 선택하면 맞춤 공지를 볼 수
+                                    있어요.
+                                  </Text>
+                                )}
+                                {profileSaveState === 'error' && (
                                   <Button
-                                    label={
-                                      testingNotification
-                                        ? '알림 예약 중…'
-                                        : '10초 뒤 테스트 알림'
+                                    label="설정 저장 다시 시도"
+                                    onPress={() =>
+                                      setProfileRetry((value) => value + 1)
                                     }
-                                    onPress={async () => {
-                                      if (testingNotification) return;
-                                      setTestingNotification(true);
-                                      try {
-                                        const scheduled =
-                                          await testNotification();
-                                        setMessage(
-                                          scheduled
-                                            ? '테스트 알림을 예약했어요.'
-                                            : '기기 설정에서 알림을 허용해 주세요.',
-                                        );
-                                      } catch (error) {
-                                        setMessage(
-                                          error instanceof Error
-                                            ? error.message
-                                            : '테스트 알림을 예약하지 못했어요.',
-                                        );
-                                      } finally {
-                                        setTestingNotification(false);
-                                      }
-                                    }}
                                   />
                                 )}
-                                {reservationStatus && (
-                                  <View style={s.card}>
-                                    <Text style={s.section}>
-                                      가상 공지 마감 알림 검증
-                                    </Text>
-                                    <Text style={s.muted}>
-                                      해커톤 공지를 선택하고 신청 상태를 준비
-                                      중으로 바꾼 뒤 예약하세요. 테스트 알림은
-                                      5분 뒤에 예정돼요.
-                                    </Text>
-                                    {([true, false] as const).map((enable) => (
-                                      <Button
-                                        key={String(enable)}
-                                        label={
-                                          enable
-                                            ? '가상 마감 알림 예약'
-                                            : '가상 마감 예약 수 확인'
-                                        }
-                                        onPress={async () => {
-                                          if (testingNotification) return;
-                                          setTestingNotification(true);
-                                          try {
-                                            const count =
-                                              await reservationStatus(enable);
-                                            setMessage(
-                                              `기기에 남은 가상 마감 예약 · ${count}건`,
-                                            );
-                                          } catch (error) {
-                                            setMessage(
-                                              error instanceof Error
-                                                ? error.message
-                                                : '예약을 확인하지 못했어요.',
-                                            );
-                                          } finally {
-                                            setTestingNotification(false);
-                                          }
-                                        }}
-                                      />
-                                    ))}
-                                  </View>
+                                {developerToolsEnabled && (
+                                  <Button
+                                    label="개발자 도구"
+                                    onPress={() => router.push('/dev')}
+                                  />
                                 )}
                               </>
                             )}

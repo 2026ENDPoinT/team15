@@ -1,6 +1,36 @@
 import type { NoticeDetail, NoticeRecord } from '../../db/noticeRepository';
 import { notices as samples, type Notice } from './campusNotices';
 import { isLiveNotice } from '../../services/noticeSync';
+import { detailEventLabel } from './noticeDetailPresentation';
+
+export function isNoticeCardReady(record: NoticeRecord): boolean {
+  // 고정 시연 카드는 수작업으로 작성한 완성 예시이며 AI 큐 대상이 아니다.
+  return (
+    !isLiveNotice(record.notice) ||
+    (record.analysisFresh && record.analysisStatus === 'ready')
+  );
+}
+
+export function getAnalysisProgress(records: NoticeRecord[]) {
+  const progress = {
+    total: 0,
+    completed: 0,
+    running: 0,
+    waiting: 0,
+    failed: 0,
+    unsupported: 0,
+  };
+  for (const record of records) {
+    if (!isLiveNotice(record.notice)) continue;
+    progress.total++;
+    if (isNoticeCardReady(record)) progress.completed++;
+    else if (record.analysisStatus === 'running') progress.running++;
+    else if (record.analysisStatus === 'failed') progress.failed++;
+    else if (record.analysisStatus === 'unsupported') progress.unsupported++;
+    else progress.waiting++;
+  }
+  return progress;
+}
 
 export function toNoticeCard(
   record: NoticeRecord,
@@ -17,6 +47,10 @@ export function toNoticeCard(
           event.type === 'application_close' && event.status === 'resolved',
       )
     : null;
+  const otherEvent = detail.analysisFresh
+    ? (analysis?.events.find((event) => event.type === 'application_close') ??
+      analysis?.events[0])
+    : null;
   return {
     id: record.notice.id,
     sourceUrl: record.notice.sourceUrl,
@@ -28,11 +62,14 @@ export function toNoticeCard(
     tags: analysis?.tags ?? [],
     date: deadline?.date ?? null,
     time: deadline?.time ?? null,
+    scheduleText: otherEvent
+      ? detailEventLabel(otherEvent).replace(' · ', ': ')
+      : null,
     summary:
       analysis?.summary ??
       (record.notice.bodyText.slice(0, 180) ||
         '원문에서 내용을 확인해 주세요.'),
-    synthetic: false,
+    synthetic: !isLiveNotice(record.notice),
     analysisLabel: detail.analysisFresh
       ? '분석 완료'
       : analysis

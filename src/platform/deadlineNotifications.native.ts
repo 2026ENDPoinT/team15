@@ -122,6 +122,7 @@ export async function scheduleTestNotification(): Promise<boolean> {
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  await prepareChannel();
   const current = await Notifications.getPermissionsAsync();
   return (
     current.granted ||
@@ -129,4 +130,19 @@ export async function requestNotificationPermission(): Promise<boolean> {
       ? false
       : (await Notifications.requestPermissionsAsync()).granted)
   );
+}
+
+export async function showDemoNoticeNotification(
+  title: string,
+): Promise<boolean> {
+  // Use the same host notification channel as the device delivery test.
+  if (!(await requestNotificationPermission())) return false;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: '관심사에 맞는 새 공지가 올라왔어요', body: title },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 3,
+    },
+  });
+  return true;
 }

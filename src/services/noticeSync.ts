@@ -18,6 +18,7 @@ export interface SyncStatus {
   phase: 'idle' | 'collecting' | 'analyzing';
   message: string | null;
   analysisRetryAt: string | null;
+  analysisBlocked: boolean;
 }
 
 export function isLiveNotice(notice: CollectedNotice): boolean {
@@ -44,6 +45,7 @@ export function createNoticeSync(options: {
     phase: 'idle',
     message: null,
     analysisRetryAt: null,
+    analysisBlocked: false,
   };
   const listeners = new Set<() => void>();
   function publish(update: Partial<SyncStatus>) {
@@ -51,6 +53,7 @@ export function createNoticeSync(options: {
     for (const listener of listeners) listener();
   }
   let refresh: Promise<void> | null = null;
+  let continuation: Promise<void> | null = null;
   let analysisQueue = Promise.resolve();
   const detailRequests = new Map<string, Promise<void>>();
   let authBlocked = false;
@@ -84,22 +87,24 @@ export function createNoticeSync(options: {
     await changed();
   }
 
-  async function analyzeOne(record: NoticeRecord): Promise<boolean> {
+  async function analyzeOne(
+    record: NoticeRecord,
+  ): Promise<'skipped' | 'done' | 'failed'> {
     if (record.analysisFresh || !isLiveNotice(record.notice) || authBlocked)
-      return false;
+      return 'skipped';
     const state = await repository.getSyncState();
     publish({ analysisRetryAt: state.analysisRetryAt });
     if (
       state.analysisRetryAt &&
       Date.parse(state.analysisRetryAt) > now().getTime()
     )
-      return false;
+      return 'skipped';
     const requestKey = {
       noticeId: record.notice.id,
       contentHash: record.notice.contentHash,
       requestId: options.randomUUID(),
     };
-    if (!(await repository.beginAnalysis(requestKey))) return false;
+    if (!(await repository.beginAnalysis(requestKey))) return 'skipped';
     publish({ phase: 'analyzing' });
     await changed();
     let request: AnalyzeNoticeRequest;
@@ -112,8 +117,9 @@ export function createNoticeSync(options: {
         'INPUT_TOO_LARGE',
       );
       await changed();
-      return false;
+      return 'skipped';
     }
+    let failed = false;
     try {
       const envelope = await options.analyze(request);
       // Keep the request comparison here as well as in the HTTP adapter: injected adapters
@@ -140,6 +146,10 @@ export function createNoticeSync(options: {
           : 'failed',
         failure.code,
       );
+      failed =
+        applied &&
+        failure.code !== 'INPUT_TOO_LARGE' &&
+        failure.code !== 'INVALID_INPUT';
       if (applied) publish({ message: failure.message });
       if (failure.code === 'RATE_LIMITED') {
         const retryAt = new Date(
@@ -152,11 +162,13 @@ export function createNoticeSync(options: {
         failure.code === 'UNAUTHORIZED' ||
         failure.code === 'NOT_CONFIGURED' ||
         failure.code === 'CONTRACT_MISMATCH'
-      )
+      ) {
         authBlocked = true;
+        publish({ analysisBlocked: true });
+      }
     }
     await changed();
-    return true;
+    return failed ? 'failed' : 'done';
   }
 
   function enqueueAnalysis(work: () => Promise<void>) {
@@ -184,15 +196,15 @@ export function createNoticeSync(options: {
   }
   async function analyzeBatch() {
     const attempted = new Set<string>();
-    for (let count = 0; count < 10;) {
+    // A run visits each notice once; errors pause it until the user retries.
+    for (;;) {
       const records = (await repository.listNoticeRecords())
         .filter(
           (record) =>
             isLiveNotice(record.notice) &&
             !record.analysisFresh &&
             record.analysisStatus !== 'unsupported' &&
-            !attempted.has(record.notice.id) &&
-            priority(record) < 3,
+            !attempted.has(record.notice.id),
         )
         .sort(
           (a, b) =>
@@ -201,7 +213,7 @@ export function createNoticeSync(options: {
       const next = records[0];
       if (!next) break;
       attempted.add(next.notice.id);
-      if (await analyzeOne(next)) count++;
+      if ((await analyzeOne(next)) === 'failed') break;
       const state = await repository.getSyncState();
       if (
         authBlocked ||
@@ -317,12 +329,13 @@ export function createNoticeSync(options: {
     },
     resetAccess() {
       authBlocked = false;
-      publish({ message: null });
+      publish({ message: null, analysisBlocked: false });
     },
     refreshNotices(
       reason: Parameters<NoticeActions['refreshNotices']>[0],
     ): Promise<void> {
       if (refresh) return refresh;
+      if (continuation) return continuation;
       refresh = runRefresh(reason)
         .catch(() => {
           publish({
@@ -336,6 +349,28 @@ export function createNoticeSync(options: {
         });
       return refresh;
     },
+    analyzePendingNotices(): Promise<void> {
+      if (refresh) return refresh;
+      if (continuation) return continuation;
+      if (
+        authBlocked ||
+        (status.analysisRetryAt &&
+          Date.parse(status.analysisRetryAt) > now().getTime())
+      )
+        return Promise.resolve();
+      publish({ phase: 'analyzing', message: null });
+      continuation = enqueueAnalysis(analyzeBatch)
+        .catch(() => {
+          publish({
+            message: '분석을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.',
+          });
+        })
+        .finally(() => {
+          continuation = null;
+          publish({ phase: detailRequests.size ? 'analyzing' : 'idle' });
+        });
+      return continuation;
+    },
     analyzeNotice(noticeId: string): Promise<void> {
       const running = detailRequests.get(noticeId);
       if (running) return running;
@@ -346,7 +381,14 @@ export function createNoticeSync(options: {
         if (record) await analyzeOne(record);
       }).finally(() => {
         detailRequests.delete(noticeId);
-        publish({ phase: refresh ? 'collecting' : 'idle' });
+        publish({
+          phase:
+            continuation || detailRequests.size
+              ? 'analyzing'
+              : refresh
+                ? 'collecting'
+                : 'idle',
+        });
       });
       detailRequests.set(noticeId, result);
       return result;

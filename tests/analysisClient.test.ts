@@ -25,7 +25,7 @@ test('모바일 클라이언트는 프로필 없이 요청하고 ID·해시·버
   for (const patch of [
     { notice_id: 'other' },
     { content_hash: 'a'.repeat(64) },
-    { extractor_version: 'e2' },
+    { extractor_version: 'unsupported' },
     { schema_version: '1.0' },
   ]) {
     const mismatch = createAnalysisClient({

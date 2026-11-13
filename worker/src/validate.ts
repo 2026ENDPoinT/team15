@@ -7,6 +7,7 @@ import {
   type NoticeAnalysis,
 } from '../../shared/contracts';
 import { ApiFailure } from './http';
+import { explicitDates, inferEventDate } from './eventDates';
 
 const scopeLabels = {
   departments: '학과',
@@ -29,27 +30,6 @@ const eventLabels: Record<EventType, string> = {
   event_end: '활동 종료',
   result_announcement: '결과 발표',
 };
-
-function fullDates(evidence: string): string[] {
-  const dates: string[] = [];
-  for (const match of evidence.matchAll(
-    /(?<!\d)(\d{4})\s*(?:년\s*|[./-]\s*)(\d{1,2})\s*(?:월\s*|[./-]\s*)(\d{1,2})(?:\s*일)?(?!\d)/g,
-  )) {
-    const start = `${match[1]}-${match[2]!.padStart(2, '0')}-${match[3]!.padStart(2, '0')}`;
-    dates.push(start);
-    // 같은 연속 날짜 범위의 생략된 연·월만 연결한다. 다른 문장이나 연도 경계는 추측하지 않는다.
-    const tail = evidence.slice(match.index! + match[0].length);
-    const end =
-      /^\s*\.?\s*(?:\([^\)\n]{1,10}\)\s*)?(?:~|～|–|—|부터)\s*(?:(\d{1,2})\s*(?:월\s*|[./-]\s*))?(\d{1,2})(?:\s*일)?(?!\d)/.exec(
-        tail,
-      );
-    if (end) {
-      const endDate = `${match[1]}-${(end[1] ?? match[2]!).padStart(2, '0')}-${end[2]!.padStart(2, '0')}`;
-      if (endDate >= start) dates.push(endDate);
-    }
-  }
-  return dates;
-}
 
 function hasTime(evidence: string, time: string): boolean {
   for (const match of evidence.matchAll(
@@ -164,7 +144,7 @@ export function validateAnalysis(
     let result = event;
     if (
       event.status === 'resolved' &&
-      !fullDates(evidence).includes(event.date)
+      !explicitDates(evidence).includes(event.date)
     ) {
       note(`${event.label}: 해당 날짜의 연·월·일 근거가 불명확합니다.`);
       result = asReview(result);
@@ -179,6 +159,21 @@ export function validateAnalysis(
               time: null,
               precision: result.date === null ? 'unknown' : 'date',
             };
+    }
+    if (
+      result.status === 'needs_review' &&
+      (result.date === null || !explicitDates(evidence).includes(result.date))
+    ) {
+      const inferred = inferEventDate(input, result);
+      result = {
+        ...result,
+        date: inferred?.date ?? null,
+        precision: inferred ? (result.time ? 'datetime' : 'date') : 'unknown',
+      };
+      if (inferred)
+        note(
+          `${event.label}: ${inferred.reason} 자동 일정·알림에는 반영하지 않습니다.`,
+        );
     }
     return result;
   });

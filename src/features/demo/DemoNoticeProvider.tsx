@@ -22,6 +22,7 @@ import {
   deadlineNotifications,
   requestNotificationPermission,
   scheduleTestNotification,
+  showDemoNoticeNotification,
 } from '../../platform/deadlineNotifications';
 import { reminderFireAt } from '../../domain/dates';
 import { demoNotice } from './demoNotice';
@@ -32,14 +33,28 @@ import { toAnalyzeNoticeRequest } from '../../../shared/mappers';
 import { analysisAccess } from '../../platform/analysisAccess';
 import { createAnalysisClient } from '../../services/analysisClient';
 import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
-import { toNoticeCard } from './noticeReadModel';
+import {
+  getAnalysisProgress,
+  isNoticeCardReady,
+  toNoticeCard,
+} from './noticeReadModel';
+import { matchesCollege } from '../../domain/collegeFilter';
 import {
   defaultCampusProfile,
   type CampusProfile,
 } from '../../domain/campusProfile';
 import type { NotificationSnapshot } from './noticeDetailPresentation';
+import { developerToolsEnabled } from '../verification/developerTools';
 
 const dataListeners = new Set<() => Promise<void>>();
+const demoEnabled = process.env.EXPO_PUBLIC_NOTICE_DEMO === '1';
+const demoPostId = '999999991';
+const demoNoticeId = normalNoticeFixture.notice.id.replace(
+  /[^:]+$/,
+  demoPostId,
+);
+const demoTitle = '정보통신대학 장학금 신청 안내';
+const demoBody = '신청 대상: 정보통신대학 재학생\n발표용 가상 공지입니다.';
 let reminderWarning: string | null = null;
 
 async function openDemoRepository() {
@@ -117,7 +132,7 @@ async function openDemoRepository() {
         }
       : undefined;
     const reservationStatus =
-      platform && reconcile
+      developerToolsEnabled && platform && reconcile
         ? async (enable: boolean) => {
             if (enable && !(await requestNotificationPermission())) {
               throw new Error('기기 설정에서 알림을 허용해 주세요.');
@@ -198,15 +213,23 @@ async function readState(repository: Repository) {
   }
   const reminders = await repository.listReminders();
   const home = await repository.getHomeModel();
+  if (!demoEnabled) {
+    home.notices = home.notices.filter(({ id }) => id !== demoNoticeId);
+    home.schedule = home.schedule.filter(
+      ({ noticeId }) => noticeId !== demoNoticeId,
+    );
+  }
   const checklist = await repository.getChecklist(demoNotice.id);
   const records = await repository.listNoticeRecords();
   const entries = await Promise.all(
-    records.map(async (record) => ({
-      id: record.notice.id,
-      record,
-      detail: await repository.getNoticeDetail(record.notice.id),
-      checklist: await repository.getChecklist(record.notice.id),
-    })),
+    records
+      .filter(({ notice }) => notice.id !== demoNoticeId || demoEnabled)
+      .map(async (record) => ({
+        id: record.notice.id,
+        record,
+        detail: await repository.getNoticeDetail(record.notice.id),
+        checklist: await repository.getChecklist(record.notice.id),
+      })),
   );
   return {
     home,
@@ -214,9 +237,12 @@ async function readState(repository: Repository) {
     profile: (await repository.getProfile()) ?? defaultCampusProfile,
     reminders,
     notificationSnapshot,
+    analysisProgress: getAnalysisProgress(records),
     notices: entries
       .flatMap(({ record, detail }) =>
-        detail ? [toNoticeCard(record, detail)] : [],
+        detail && isNoticeCardReady(record)
+          ? [toNoticeCard(record, detail)]
+          : [],
       )
       .sort(
         (a, b) =>
@@ -245,9 +271,14 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   saveAnalysisToken(token: string): Promise<void>;
   clearAnalysisToken(): Promise<void>;
   refreshNotices(): Promise<void>;
+  analyzePendingNotices(): Promise<void>;
+  demoNewNoticeId: string | null;
+  demoStatus: string | null;
+  refreshDemoNotice: (() => Promise<void>) | null;
   analyzeNotice(id: string): Promise<void>;
   saveProfile(profile: CampusProfile): Promise<void>;
   refreshReminders(): Promise<void>;
+  enableDeadlineNotifications: (() => Promise<boolean>) | null;
   notice: typeof demoNotice;
   testNotification: (() => Promise<boolean>) | null;
   reservationStatus: ((enable: boolean) => Promise<number>) | null;
@@ -266,11 +297,15 @@ const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
 
 export function DemoNoticeProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<Awaited<ReturnType<typeof readState>>>();
+  const demoRunning = useRef(false);
+  const [demoNewNoticeId, setDemoNewNoticeId] = useState<string | null>(null);
+  const [demoStatus, setDemoStatus] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [hasAnalysisAccess, setHasAnalysisAccess] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     phase: 'idle',
+    analysisBlocked: false,
     message: null,
     analysisRetryAt: null,
   });
@@ -408,9 +443,79 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
           (await getRepository()).sync.resetAccess();
           setHasAnalysisAccess(false);
         },
+        demoNewNoticeId,
+        demoStatus,
         refreshNotices: async () => {
           await (await getRepository()).sync.refreshNotices('manual');
         },
+        analyzePendingNotices: async () => {
+          await (await getRepository()).sync.analyzePendingNotices();
+        },
+        refreshDemoNotice: demoEnabled
+          ? async () => {
+              if (demoRunning.current) return;
+              demoRunning.current = true;
+              let loaded = false;
+              setDemoStatus(null);
+              try {
+                const { repository } = await getRepository();
+                const profile =
+                  (await repository.getProfile()) ?? defaultCampusProfile;
+                const raw = collectedNoticeSchema.parse({
+                  ...normalNoticeFixture.notice,
+                  id: demoNoticeId,
+                  postId: demoPostId,
+                  sourceUrl:
+                    'https://example.invalid/synthetic/notices/' + demoPostId,
+                  title: demoTitle,
+                  bodyText: demoBody,
+                  fetchedAt: new Date().toISOString(),
+                  publishedDate: null,
+                  extractedLinks: [],
+                  attachments: [],
+                  hasBodyImages: false,
+                });
+                const contentHash = await hashNoticeContent(
+                  toAnalyzeNoticeRequest(raw),
+                  (text) =>
+                    digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+                );
+                await repository.upsertRawNotice({ ...raw, contentHash });
+                await repository.unsaveNotice(demoNoticeId);
+                await repository.restoreNotice(demoNoticeId);
+                const matched =
+                  matchesCollege(profile.college, demoTitle, demoBody) &&
+                  profile.keywords.some(
+                    (keyword) =>
+                      demoTitle.includes(keyword) || demoBody.includes(keyword),
+                  );
+                setDemoNewNoticeId(matched ? demoNoticeId : null);
+                await reloadState(repository);
+                loaded = true;
+                if (!matched) {
+                  setDemoStatus(
+                    '시연 공지가 저장된 단과대학·키워드에 맞지 않아요.',
+                  );
+                  return;
+                }
+                const notified = await showDemoNoticeNotification(demoTitle);
+                setDemoStatus(
+                  notified
+                    ? '관심사에 맞는 새 공지가 올라왔어요. 3초 뒤 기기 알림을 예약했어요.'
+                    : '관심사에 맞는 새 공지가 올라왔어요. 기기 알림을 사용할 수 없어요.',
+                );
+              } catch (error) {
+                console.warn('시연 공지 새로고침 실패', error);
+                setDemoStatus(
+                  loaded
+                    ? '시연 공지는 불러왔지만 기기 알림을 표시하지 못했어요.'
+                    : '시연 공지를 불러오지 못했어요. 다시 시도해 주세요.',
+                );
+              } finally {
+                demoRunning.current = false;
+              }
+            }
+          : null,
         analyzeNotice: async (id) => {
           await (await getRepository()).sync.analyzeNotice(id);
         },
@@ -428,25 +533,39 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
             await reloadState(repository);
           }
         },
-        reservationStatus: deadlineNotifications
-          ? async (enable) => {
-              const { repository, reservationStatus } = await getRepository();
+        enableDeadlineNotifications: deadlineNotifications
+          ? async () => {
+              const { repository, actions } = await getRepository();
               try {
-                return (await reservationStatus?.(enable)) ?? 0;
+                const granted = await requestNotificationPermission();
+                await actions.reconcileReminders();
+                return granted;
               } finally {
                 await reloadState(repository);
               }
             }
           : null,
-        testNotification: deadlineNotifications
-          ? async () => {
-              const scheduled = await scheduleTestNotification();
-              void getRepository()
-                .then(({ actions }) => actions.reconcileReminders())
-                .catch(() => undefined);
-              return scheduled;
-            }
-          : null,
+        reservationStatus:
+          developerToolsEnabled && deadlineNotifications
+            ? async (enable) => {
+                const { repository, reservationStatus } = await getRepository();
+                try {
+                  return (await reservationStatus?.(enable)) ?? 0;
+                } finally {
+                  await reloadState(repository);
+                }
+              }
+            : null,
+        testNotification:
+          developerToolsEnabled && deadlineNotifications
+            ? async () => {
+                const scheduled = await scheduleTestNotification();
+                void getRepository()
+                  .then(({ actions }) => actions.reconcileReminders())
+                  .catch(() => undefined);
+                return scheduled;
+              }
+            : null,
       }}
     >
       {children}

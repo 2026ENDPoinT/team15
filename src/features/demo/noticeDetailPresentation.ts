@@ -1,4 +1,14 @@
 import type { ReminderRecord } from '../../db/noticeRepository';
+import type { ExtractedEvent } from '../../../shared/contracts';
+
+export function detailEventLabel(event: ExtractedEvent): string {
+  if (event.status === 'resolved')
+    return `${event.label} · ${event.date}${event.time ? ` ${event.time}` : ''}`;
+  const candidate = event.date
+    ? ` · 후보 ${event.date}${event.time ? ` ${event.time}` : ''}`
+    : '';
+  return `${event.label} · ${event.evidence}${candidate} · 확인 필요`;
+}
 const attachmentNotes = new Set([
   '첨부파일 내용은 확인하지 못했으므로 원문과 첨부파일을 함께 참고하시기 바랍니다.',
   '첨부파일 내용은 분석하지 않았습니다. 원문에서 첨부를 확인하세요.',

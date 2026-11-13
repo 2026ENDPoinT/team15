@@ -10,3 +10,9 @@ export async function scheduleTestNotification(): Promise<boolean> {
 export async function requestNotificationPermission(): Promise<boolean> {
   return false;
 }
+
+export async function showDemoNoticeNotification(
+  _title: string,
+): Promise<boolean> {
+  return false;
+}

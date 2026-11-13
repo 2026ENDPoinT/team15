@@ -1,0 +1,225 @@
+{
+  "verified_at": "2026-11-13T18:38:03.145Z",
+  "worker_url": "https://team15-notice-ai.team15-campus-notice.workers.dev",
+  "input_kind": "captured_real_html",
+  "results": [
+    {
+      "source_url": "https://www.seoultech.ac.kr/service/info/notice?do=commonview&searchtext=&searchtype=-1&nowpage=1&bnum=4691&bidx=897750&qidx=4691&cate=10&allboard=false&nowpage=1",
+      "request_id": "4aae8535-c2ae-428c-b76d-8fcd5c884282",
+      "envelope": {
+        "notice_id": "seoultech_general:4691:897750",
+        "content_hash": "48778f6d4e82e14ef49a3e70870de55a56299a79943643e31f424fd3734b77b5",
+        "schema_version": "1.1",
+        "extractor_version": "e2",
+        "analyzed_at": "2026-11-13T18:37:58.747Z",
+        "data": {
+          "summary": "국제대학 글로벌자유전공학부에서 외국인 재학생과 동행하며 한국의 일상을 나누는 K-로컬 문화 기행 '팔도유람: 부산편'의 로컬 메이트를 모집합니다.",
+          "tags": [
+            "국제대학",
+            "글로벌자유전공학부",
+            "K-로컬",
+            "문화기행",
+            "로컬메이트",
+            "부산"
+          ],
+          "benefits": [
+            "부산 1박2일 교통비, 숙박비 전액 지원",
+            "국제대학 명의 활동 증명서 발급 ※EPic 미포함"
+          ],
+          "activity": {
+            "period_text": "2026. 12. 14.(월)~12.15.(화), 1박 2일",
+            "frequency_text": "1박 2일",
+            "location_text": "부산 일대",
+            "evidence": "- 방문 일정: 2026. 12. 14.(월)~12.15.(화), 1박 2일\n\n- 방문 장소: 부산 일대"
+          },
+          "eligibility": {
+            "comparison": "all_of",
+            "departments": {
+              "mode": "unknown",
+              "values": [],
+              "evidence": null
+            },
+            "grades": {
+              "mode": "unknown",
+              "values": [],
+              "evidence": "기말 고사 이후, 외국인 친구들과 교류하며 한국의 일상을 나누고 싶은 재학생이라면 누구나 환영합니다!"
+            },
+            "enrollments": {
+              "mode": "specific",
+              "values": ["enrolled"],
+              "evidence": "- 모집 대상: 서울과학기술대학교 한국인 재학생"
+            },
+            "other_conditions": ["한국인 재학생"]
+          },
+          "events": [
+            {
+              "type": "event_start",
+              "label": "방문 일정 시작",
+              "evidence": "- 방문 일정: 2026. 12. 14.(월)~12.15.(화), 1박 2일",
+              "status": "resolved",
+              "date": "2026-12-14",
+              "time": null,
+              "timezone": "Asia/Seoul",
+              "precision": "date"
+            },
+            {
+              "type": "event_end",
+              "label": "방문 일정 종료",
+              "evidence": "- 방문 일정: 2026. 12. 14.(월)~12.15.(화), 1박 2일",
+              "status": "resolved",
+              "date": "2026-12-15",
+              "time": null,
+              "timezone": "Asia/Seoul",
+              "precision": "date"
+            },
+            {
+              "type": "application_close",
+              "label": "신청 기간 마감",
+              "evidence": "- 신청 기간: ~11월 16일(월)까지",
+              "status": "needs_review",
+              "date": "2026-11-16",
+              "time": null,
+              "timezone": null,
+              "precision": "date"
+            },
+            {
+              "type": "result_announcement",
+              "label": "결과 안내",
+              "evidence": "- 결과 안내: 11월 17일(화) 19:00 (선발자에게 개별 연락 예정)",
+              "status": "needs_review",
+              "date": "2026-11-17",
+              "time": "19:00",
+              "timezone": "Asia/Seoul",
+              "precision": "datetime"
+            }
+          ],
+          "checklist": [
+            {
+              "text": "구글폼 작성하여 신청",
+              "evidence": "- 신청 방법: 포스터 내 QR코드 또는 아래 링크를 통해 구글폼 작성\n\n▶ https://forms.gle/rQPRbn8bEEpPDTMK9"
+            }
+          ],
+          "application_url": "https://forms.gle/rQPRbn8bEEpPDTMK9",
+          "review_notes": [
+            "신청 마감일(11월 16일)과 결과 안내일(11월 17일)에 연도가 명시되어 있지 않아 연도 확인이 필요합니다.",
+            "첨부 이미지 및 포스터 내용은 본문에 포함되지 않았으므로 원본 이미지를 직접 확인해야 합니다.",
+            "학년 제한이 없다는 명시적 근거가 없어 확인이 필요합니다.",
+            "신청 기간 마감: 본문의 다른 구절의 2026년을 바탕으로 연도를 추정했습니다. 자동 일정·알림에는 반영하지 않습니다.",
+            "결과 안내: 본문의 다른 구절의 2026년을 바탕으로 연도를 추정했습니다. 자동 일정·알림에는 반영하지 않습니다.",
+            "본문 이미지 내용은 분석하지 않았습니다. 원문에서 이미지를 확인하세요."
+          ]
+        }
+      }
+    },
+    {
+      "source_url": "https://computer.seoultech.ac.kr/info/notice?do=view&profboardidx=0&bnum=58476&bidx=897737&cate=7&allboard=false&nowpage=1",
+      "request_id": "10876a33-7835-4108-8402-996a54cf367f",
+      "envelope": {
+        "notice_id": "seoultech_cs:58476:897737",
+        "content_hash": "bd34ef92c2ed6a4fd7029aa10b478e618984988c070e0d0c33fdaf0dfb14e857",
+        "schema_version": "1.1",
+        "extractor_version": "e2",
+        "analyzed_at": "2026-11-13T18:38:03.060Z",
+        "data": {
+          "summary": "컴퓨터공학과가 주관하는 취업 준비 멘토링 2차 비교과 프로그램 참가자 모집 공고입니다.",
+          "tags": ["비교과", "취업", "멘토링", "장학금"],
+          "benefits": [
+            "멘티 참여자 확정(29명-선착순 마감)에게 소정의 장학금 지원",
+            "EPiC점수 70점 부여 (수료요건 충족자)"
+          ],
+          "activity": {
+            "period_text": "11.2.(월)~12.23.(수)",
+            "frequency_text": null,
+            "location_text": null,
+            "evidence": "나. 일시: 11.2.(월)~12.23.(수)"
+          },
+          "eligibility": {
+            "comparison": "all_of",
+            "departments": {
+              "mode": "unknown",
+              "values": [],
+              "evidence": null
+            },
+            "grades": {
+              "mode": "specific",
+              "values": [3, 4],
+              "evidence": "멘티 29명(재학생 4~3학년)"
+            },
+            "enrollments": {
+              "mode": "specific",
+              "values": ["enrolled"],
+              "evidence": "멘티 29명(재학생 4~3학년)"
+            },
+            "other_conditions": []
+          },
+          "events": [
+            {
+              "type": "event_start",
+              "label": "프로그램 시작 일시",
+              "evidence": "나. 일시: 11.2.(월)~12.23.(수)",
+              "status": "needs_review",
+              "date": "2026-11-02",
+              "time": null,
+              "timezone": null,
+              "precision": "date"
+            },
+            {
+              "type": "event_end",
+              "label": "프로그램 종료 일시",
+              "evidence": "나. 일시: 11.2.(월)~12.23.(수)",
+              "status": "needs_review",
+              "date": "2026-12-23",
+              "time": null,
+              "timezone": null,
+              "precision": "date"
+            }
+          ],
+          "checklist": [
+            {
+              "text": "EPiC 비교과 멘티 신청",
+              "evidence": "마. 방법: EPiC 비교과 멘티 신청, 각 결과보고서 제출"
+            },
+            {
+              "text": "각 결과보고서 제출",
+              "evidence": "마. 방법: EPiC 비교과 멘티 신청, 각 결과보고서 제출"
+            }
+          ],
+          "application_url": "https://epic.seoultech.ac.kr/",
+          "review_notes": [
+            "본문에 연도가 명시되지 않아 일시 및 마감일의 정확한 연도 확인이 필요합니다.",
+            "첨부파일 및 이미지의 세부 내용은 확인하지 못했으므로 원문을 참고하시기 바랍니다.",
+            "프로그램 시작 일시: 게시일 2026-11-12에 가까운 날짜로 연도를 추정했습니다. 자동 일정·알림에는 반영하지 않습니다.",
+            "프로그램 종료 일시: 게시일 2026-11-12에 가까운 날짜로 연도를 추정했습니다. 자동 일정·알림에는 반영하지 않습니다.",
+            "첨부파일 내용은 분석하지 않았습니다. 원문에서 첨부를 확인하세요."
+          ]
+        }
+      }
+    }
+  ],
+  "cloudflare_version_id": "a59dd770-30fa-4aa9-8345-d3b13d290c19",
+  "evidence_kind": "deployed_worker_responses",
+  "version_probe_before": [
+    {
+      "version": "e1",
+      "status": 400,
+      "code": "INVALID_INPUT"
+    },
+    {
+      "version": "e2",
+      "status": 409,
+      "code": "CONTRACT_MISMATCH"
+    }
+  ],
+  "version_probe_after": [
+    {
+      "version": "e1",
+      "status": 409,
+      "code": "CONTRACT_MISMATCH"
+    },
+    {
+      "version": "e2",
+      "status": 400,
+      "code": "INVALID_INPUT"
+    }
+  ]
+}

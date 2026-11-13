@@ -23,7 +23,8 @@ test('실제 HTML fixture로 Expo 파싱·해시·검증 화면을 연결한다'
       ),
     });
   });
-  await page.goto('/dev/collection');
+  await page.goto('/dev');
+  await page.getByRole('button', { name: 'T02 수집 검증 열기' }).click();
   await page
     .getByRole('button', { name: '두 게시판 수집 확인', exact: true })
     .click();

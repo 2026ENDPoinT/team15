@@ -135,6 +135,7 @@ export interface NoticeDetail {
     | 'attachments'
     | 'hasBodyImages'
     | 'sourceUpdatedAt'
+    | 'publishedDate'
   >;
 }
 
@@ -487,11 +488,18 @@ export async function createNoticeRepository(
              content_hash = excluded.content_hash,
              fetched_at = excluded.fetched_at,
              published_date = excluded.published_date,
+             analysis_json = CASE WHEN notices.published_date IS NOT excluded.published_date
+               THEN NULL ELSE notices.analysis_json END,
+             analyzed_content_hash = CASE WHEN notices.published_date IS NOT excluded.published_date
+               THEN NULL ELSE notices.analyzed_content_hash END,
              analysis_status = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN 'pending' ELSE notices.analysis_status END,
              analysis_request_id = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN NULL ELSE notices.analysis_request_id END,
              last_error = CASE WHEN notices.content_hash <> excluded.content_hash
+               OR notices.published_date IS NOT excluded.published_date
                THEN NULL ELSE notices.last_error END
            WHERE julianday(excluded.fetched_at) >= julianday(notices.fetched_at)`,
           [
@@ -716,13 +724,15 @@ export async function createNoticeRepository(
           > &
             AnalysisColumns & {
               rawJson: string;
+              publishedDate: string | null;
               deadlineBaseline: string | null;
             }
         >(
           `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
                   n.analysis_status AS analysisStatus, n.last_error AS lastError,
                   COALESCE(u.disposition, 'unseen') AS disposition, u.progress,
-                  n.raw_json AS rawJson, u.deadline_baseline_hash AS deadlineBaseline,
+                  n.raw_json AS rawJson, n.published_date AS publishedDate,
+                  u.deadline_baseline_hash AS deadlineBaseline,
                   ${analysisColumns}
            FROM notices n LEFT JOIN user_notices u ON u.notice_id = n.id WHERE n.id = ?`,
           [noticeId],
@@ -730,6 +740,7 @@ export async function createNoticeRepository(
         if (!row) return null;
         const {
           rawJson,
+          publishedDate,
           analysisJson,
           contentHash,
           deadlineBaseline,
@@ -745,7 +756,7 @@ export async function createNoticeRepository(
             deadlineBaseline;
         return {
           ...notice,
-          raw: JSON.parse(rawJson),
+          raw: { ...JSON.parse(rawJson), publishedDate },
           analysis,
           analysisFresh,
           deadlineChanged,
