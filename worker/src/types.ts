@@ -1,9 +1,17 @@
+export interface AnalysisCacheNamespace {
+  jurisdiction(name: 'eu'): AnalysisCacheNamespace;
+  idFromName(name: string): unknown;
+  get(id: unknown): { fetch(request: Request): Promise<Response> };
+}
+
 export interface WorkerEnv {
   GEMINI_API_KEY: string;
   GEMINI_MODEL: string;
   DEMO_TOKEN_SHA256: string;
   DEMO_TOKEN_EXPIRES_AT: string;
   ANALYSIS_ENABLED: string;
+  ANALYSIS_CACHE_JURISDICTION?: 'eu' | 'local';
+  ANALYSIS_CACHE?: AnalysisCacheNamespace;
   ANALYZE_RATE_LIMITER: {
     limit(options: { key: string }): Promise<{ success: boolean }>;
   };

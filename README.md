@@ -141,7 +141,7 @@ npm run worker:secrets
 
 `.env.worker-client`의 `WORKER_URL`을 배포 명령이 출력한 HTTPS 주소로 변경하고 `npm run worker:smoke`를 다시 실행한다. **배포 URL에서의 실제 모델 응답·원문 대조까지 성공해야 T05 완료**로 기록한다. `worker:deploy`는 `.dev.vars`를 자동 업로드하지 않는다. [Cloudflare 비밀 설정](https://developers.cloudflare.com/workers/configuration/secrets/)
 
-배포한 접근 제한은 `npm run worker:access-smoke`로 확인한다. 인증 누락·위조의 401과, 유효한 토큰으로 잘못된 입력을 보내 400→429 및 Retry-After를 검증한다. 이 명령은 Gemini를 호출하지 않지만 테스트 뒤 해당 토큰의 호출 제한이 잠시 유지된다. 증거는 `dist/worker-smoke/access.json`에 저장한다.
+배포한 접근 인증은 `npm run worker:access-smoke`로 확인한다. 인증 누락·위조의 401과 유효한 토큰의 잘못된 입력에 대한 400을 검증한다. 이 명령은 Gemini를 호출하지 않으며 호출 제한 검증은 하지 않는다. 공용 캐시 추가 후에는 검증된 캐시 미스만 모델 호출 제한을 소모한다. 실제 Rate Limiting binding과 캐시 적중 시 제한 우회는 `npm run test:worker`의 workerd 테스트로 검증한다. 증거는 `dist/worker-smoke/access.json`에 저장한다.
 
 토큰 만료 동작을 다시 검증할 때는 `npm run worker:expiry-smoke`를 사용한다. 원격 만료 시각을 잠깐 과거로 바꿨다가 복원하므로 시연 중에는 실행하지 않는다. 현재 시연 토큰은 2026-11-14 22:34 KST에 만료된다.
 
@@ -150,6 +150,21 @@ Worker 실행은 `placement.region=gcp:asia-northeast3`로 서울 인근에 배�
 시연을 중지하려면 `worker/wrangler.jsonc`의 `ANALYSIS_ENABLED`를 `"false"`로 바꾸고 다시 배포한다. 토큰이 만료되면 새 만료 시각을 로컬 비밀 파일에 지정하고 `worker:secrets`로 반영한다. 토큰 교체는 클라이언트 원문 토큰과 서버 SHA-256 해시를 함께 바꾼다. 토큰당 60초 10회 제한은 위치별 근사 제한이며 전역 비용 상한이 아니다. [Cloudflare 호출 제한](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 
 [T05 인계 문서](docs/campus_notice_t05_handoff.md)에 구현 경계·검증 증거·남은 완료 조건을 정리했다.
+
+### 4.1 공용 분석 캐시
+
+Worker에 SQLite 기반 `AnalysisCache` Durable Object를 연결했다. 같은 요청·모델·프롬프트의 성공 분석을 7일간 공유하고 동시 요청을 하나의 Gemini 호출로 합친다. 본문뿐 아니라 게시일·공지 ID·schema/extractor 버전도 캐시 키에 포함한다. 캐시 반환에도 인증·토큰 만료·입력 검증을 적용하며, 앱의 응답 계약과 SQLite 캐시는 유지한다. 검증 로직 변경 시에는 기존 규칙대로 extractor 버전을 올려야 한다.
+
+```bash
+npm run test:worker
+npm run worker:build
+# 운영 반영 시 실행: 바인딩과 SQLite Durable Object migration을 함께 배포
+npm run worker:deploy
+```
+
+별도 저장소 ID 생성이나 API 키 재등록은 필요 없다. 저장소 오류는 503으로 반환하며 우회 Gemini 호출은 하지 않는다. Durable Object는 Worker의 서울 placement를 상속하지 않으므로, 기존 HKG 미지원 지역 문제를 피하도록 EU jurisdiction에 생성한다. [Cloudflare 실행 지역 문서](https://developers.cloudflare.com/durable-objects/reference/data-location/). 이번 캐시 변경은 로컬 검증 대상이며 운영 배포·실제 Gemini 지역 검증은 별도로 필요하다. 새 공지의 첫 분석과 캐시 만료 후 분석은 여전히 Gemini 한도를 사용한다.
+
+로컬 workerd는 jurisdiction을 구현하지 않으므로 `worker/.dev.vars`에 `ANALYSIS_CACHE_JURISDICTION="local"`을 추가한다. 운영 `wrangler.jsonc`의 `eu` 설정은 유지한다. 로컬 Gemini 요청은 개발 환경의 네트워크에서 실행된다.
 
 ## 5 T07 실제 공지 연결
 
