@@ -55,7 +55,7 @@ npm run web
 
 `src/features/demo/demoNotice.ts`가 API/fixture를 화면용 camelCase 읽기 모델로 한 번 변환한다. `DemoNoticeProvider`는 T01 임시 구현이며 `saveNotice`·`unsaveNotice` 시그니처를 공유 계약에서 가져온다. B는 해당 경계를 DB 기반 서비스로 교체한다. 화면에 SQL·파서·AI 호출을 넣지 않는다.
 
-카드는 현재 같은 NoticeCard를 두 탭에서 공유한다. 공통 UI 수정의 소유권은 A·B가 맞춘 뒤 변경한다. T01에서 날짜는 샘플의 확정 값을 표시만 하며 실제 현재 시각에 따른 마감 판정·추천·알림은 구현하지 않는다.
+위 표는 T01 당시의 소유권 기록이다. 당시 두 탭에서 공유한 `NoticeCard.tsx`는 이후 `CampusApp.tsx`·`DiscoverCard.tsx` 기반 UI로 대체되어 미사용 파일 정리에서 삭제했다. 공통 UI 수정의 소유권은 A·B가 맞춘 뒤 변경한다. T01에서 날짜는 샘플의 확정 값을 표시만 하며 실제 현재 시각에 따른 마감 판정·추천·알림은 구현하지 않는다.
 
 ## 5 검증 명령
 
