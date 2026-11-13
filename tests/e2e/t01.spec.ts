@@ -74,7 +74,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
   await expect(
-    detailCard.getByText('상세 내용', { exact: true }),
+    detailCard.getByText('신청 대상', { exact: true }),
   ).toBeVisible();
   expect((await detailCard.boundingBox())!.height).toBeGreaterThan(
     collapsedHeight,
@@ -106,7 +106,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await detailCard
     .getByRole('button', { name: '상세 접기 ∧', exact: true })
     .click();
-  await expect(detailCard.getByText('상세 내용', { exact: true })).toHaveCount(
+  await expect(detailCard.getByText('신청 대상', { exact: true })).toHaveCount(
     0,
   );
   expect((await detailCard.boundingBox())!.height).toBe(collapsedHeight);

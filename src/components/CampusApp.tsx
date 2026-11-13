@@ -298,6 +298,16 @@ export default function CampusApp() {
     saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
+  const changingNotices = useRef(new Set<string>());
+  const [pendingNoticeIds, setPendingNoticeIds] = useState<string[]>([]);
+  // Keep processed cards out of the queue until a repository snapshot confirms
+  // their new bucket. A background reload can supersede the action's reload.
+  useEffect(() => {
+    setPendingNoticeIds((old) => {
+      const next = old.filter((id) => buckets[id] === 'unseen');
+      return next.length === old.length ? old : next;
+    });
+  }, [buckets]);
   const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
   const [options] = useState([
@@ -500,16 +510,20 @@ export default function CampusApp() {
       select: actions.saveNotice,
       restore: actions.restoreNotice,
     }[action as 'delete' | 'discard' | 'select' | 'restore'];
-    if (!write || changing.current) return false;
-    changing.current = true;
+    if (!write || changingNotices.current.has(id)) return false;
+    changingNotices.current.add(id);
+    if (action === 'select' || action === 'discard') {
+      setPendingNoticeIds((old) => [...old, id]);
+    }
     try {
       await write(id);
       setDeferredNoticeIds((old) => old.filter((entry) => entry !== id));
     } catch {
+      setPendingNoticeIds((old) => old.filter((entry) => entry !== id));
       setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
       return false;
     } finally {
-      changing.current = false;
+      changingNotices.current.delete(id);
     }
     setMessage(
       (
@@ -632,6 +646,19 @@ export default function CampusApp() {
   function renderNoticeDetails(notice: Notice) {
     const selectedDetail = details[notice.id];
     const selectedChecklist = checklists[notice.id];
+    const analysis = selectedDetail?.analysisFresh
+      ? selectedDetail.analysis?.data
+      : undefined;
+    const conditions = analysis
+      ? [
+          ...new Set([
+            analysis.eligibility.departments.evidence,
+            analysis.eligibility.grades.evidence,
+            analysis.eligibility.enrollments.evidence,
+            ...analysis.eligibility.other_conditions,
+          ]),
+        ].filter((text): text is string => !!text)
+      : [];
     return (
       <DetailOnOpen
         onOpen={() => {
@@ -642,32 +669,97 @@ export default function CampusApp() {
         }}
       >
         <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
-          <Text style={s.section}>상세 내용</Text>
           {notice.synthetic && (
             <Text style={s.description}>
               가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
             </Text>
           )}
-          {eligibility[notice.id]!.result !== 'needs_review' && (
+          <Text style={s.description}>
+            {analysis?.summary ??
+              (notice.synthetic
+                ? notice.summary
+                : '공지 본문에서 내용을 확인해 주세요.')}
+          </Text>
+          <Text style={s.section}>신청 대상</Text>
+          <Text style={s.reason}>
+            {eligibilityLabels[eligibility[notice.id]!.result]}
+          </Text>
+          {conditions.length ? (
+            conditions.map((condition) => (
+              <Text key={condition} style={s.description}>
+                {condition}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.muted}>
+              확인된 자격 조건이 없어요. 원문에서 신청 대상을 확인해 주세요.
+            </Text>
+          )}
+          {eligibility[notice.id]!.reasons.map((reason) => (
+            <Text key={reason} style={s.muted}>
+              {reason}
+            </Text>
+          ))}
+          <Text style={s.section}>주요 일정</Text>
+          {analysis?.events.length ? (
+            analysis.events.map((event, index) => (
+              <Text key={index} style={s.description}>
+                {detailEventLabel(event)}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.description}>
+              {notice.synthetic && notice.date
+                ? `신청 마감 · ${notice.date}${notice.time ? ` ${notice.time} KST` : ''}`
+                : '확인된 일정이 없어요. 원문에서 확인해 주세요.'}
+            </Text>
+          )}
+          <Text style={s.section}>신청 방법·제출 서류</Text>
+          {analysis?.checklist.length ? (
+            analysis.checklist.map((item, index) => (
+              <Text key={index} style={s.description}>
+                • {item.text}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.muted}>
+              확인된 신청 방법이나 제출 서류가 없어요. 원문에서 확인해 주세요.
+            </Text>
+          )}
+          {!notice.synthetic && analysis?.application_url && (
+            <Button
+              label="신청 페이지 열기"
+              onPress={() => {
+                void Linking.openURL(analysis.application_url!).catch(() =>
+                  setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                );
+              }}
+            />
+          )}
+          {analysis &&
+            detailReviewNotes(
+              analysis.review_notes,
+              !!selectedDetail?.raw.attachments.length,
+            ).map((note) => (
+              <Text key={note} style={s.muted}>
+                {note}
+              </Text>
+            ))}
+          {!analysis && selectedDetail?.raw.bodyText && (
+            <>
+              <Text style={s.section}>공지 본문</Text>
+              <Text selectable style={s.description}>
+                {selectedDetail.raw.bodyText}
+              </Text>
+            </>
+          )}
+          {detailErrors[notice.id] && (
             <Text style={s.reason}>
-              {eligibilityLabels[eligibility[notice.id]!.result]}
+              요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.
             </Text>
           )}
           {!notice.synthetic && selectedDetail && (
             <>
-              {selectedDetail.analysisFresh &&
-                selectedDetail.analysis?.data.events
-                  .filter((event) => event.status === 'resolved')
-                  .map((event, index) => (
-                    <Text key={index} style={s.description}>
-                      {detailEventLabel(event)}
-                    </Text>
-                  ))}
-              {!selectedDetail.analysis && (
-                <Text selectable style={s.description}>
-                  {selectedDetail.raw.bodyText}
-                </Text>
-              )}
               {selectedDetail.disposition !== 'saved' && (
                 <Button
                   label="관심 저장"
@@ -856,6 +948,7 @@ export default function CampusApp() {
                           notificationSnapshot,
                           refreshReminders,
                           deferredNoticeIds,
+                          pendingNoticeIds,
                           profile,
                           page === 1 ? showAll : null,
                           minute,
@@ -883,6 +976,7 @@ export default function CampusApp() {
                     let visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
+                        (page === 1 && pendingNoticeIds.includes(notice.id)) ||
                         ((page === 1 || page === 2) &&
                           endedNoticeIds.has(notice.id))
                       )
@@ -1110,6 +1204,7 @@ export default function CampusApp() {
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                remainingCount={visible.length - 1}
                                 isNew={nextNotice.id === demoNewNoticeId}
                                 eligibilityLabel={
                                   eligibilityLabels[

@@ -4,12 +4,15 @@ import { useCardMotion } from './gestureMotion';
 import { useCardTouchLock } from './useCardTouchLock';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Notice } from '../features/demo/campusNotices';
 
 type Action = 'discard' | 'hold' | 'select';
@@ -17,6 +20,7 @@ type Action = 'discard' | 'hold' | 'select';
 export default function DiscoverCard({
   notice,
   isNew = false,
+  remainingCount = 0,
   detailContent,
   eligibilityLabel,
   act,
@@ -24,6 +28,7 @@ export default function DiscoverCard({
 }: {
   notice: Notice;
   isNew?: boolean;
+  remainingCount?: number;
   detailContent: ReactNode;
   eligibilityLabel: string;
   act: (action: Action) => Promise<boolean>;
@@ -80,7 +85,7 @@ export default function DiscoverCard({
     );
   };
   const motion = useCardMotion(
-    !busy,
+    !busy && !expanded,
     touchLock.startDrag,
     (dx, dy) => {
       if (Math.abs(dx) >= 56) perform(dx > 0 ? 'select' : 'discard');
@@ -90,7 +95,21 @@ export default function DiscoverCard({
     reset,
   );
   return (
-    <>
+    <View style={styles.deck}>
+      {remainingCount > 0 && (
+        <View
+          pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={StyleSheet.absoluteFill}
+        >
+          {remainingCount > 1 && (
+            <View style={[styles.stackCard, styles.stackBack]} />
+          )}
+          <View style={[styles.stackCard, styles.stackFront]} />
+        </View>
+      )}
       <GestureDetector gesture={motion.gesture}>
         <Reanimated.View
           testID="discover-card"
@@ -108,11 +127,6 @@ export default function DiscoverCard({
               style={styles.title}
             >
               {notice.title}
-            </Text>
-            <Text numberOfLines={1} style={styles.muted}>
-              {notice.synthetic
-                ? '가상 예시'
-                : '실제 공지 · ' + notice.analysisLabel}
             </Text>
             <Text numberOfLines={1} style={styles.tags}>
               {notice.tags.join(' · ')}
@@ -132,13 +146,12 @@ export default function DiscoverCard({
             accessibilityState={{ expanded }}
             aria-expanded={expanded}
             onPress={() => {
-              setExpanded((old) => !old);
+              reset();
+              setExpanded(true);
             }}
             style={styles.detailToggle}
           >
-            <Text style={styles.link}>
-              {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
-            </Text>
+            <Text style={styles.link}>공지 자세히 보기 ↗</Text>
           </Pressable>
           <View style={styles.actions}>
             {(
@@ -164,14 +177,93 @@ export default function DiscoverCard({
               </Pressable>
             ))}
           </View>
-          {expanded && detailContent}
         </Reanimated.View>
       </GestureDetector>
-    </>
+      {remainingCount > 0 && (
+        <Text pointerEvents="none" style={styles.remaining}>
+          다음 공지 {remainingCount}개가 기다리고 있어요
+        </Text>
+      )}
+      <Modal
+        visible={expanded}
+        animationType="slide"
+        onRequestClose={() => setExpanded(false)}
+      >
+        <SafeAreaView style={styles.detailScreen}>
+          <View style={styles.detailHeader}>
+            <Text style={styles.detailHeading}>공지 상세</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="닫기"
+              onPress={() => setExpanded(false)}
+              style={styles.closeButton}
+            >
+              <Text style={styles.link}>닫기</Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            testID="notice-sheet-content"
+            style={styles.detailScroll}
+            contentContainerStyle={styles.detailContent}
+          >
+            <Text style={styles.muted}>{notice.org}</Text>
+            <Text accessibilityRole="header" style={styles.title}>
+              {notice.title}
+            </Text>
+            {expanded && detailContent}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dfe5d9',
+  },
+  detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
+  closeButton: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailScroll: { flex: 1 },
+  detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
+  deck: { flexShrink: 1, minHeight: 0 },
+  stackCard: {
+    position: 'absolute',
+    top: 24,
+    bottom: 38,
+    borderWidth: 1,
+    borderColor: '#dfe5d9',
+    borderRadius: 20,
+  },
+  stackBack: {
+    left: 20,
+    right: 20,
+    bottom: 28,
+    backgroundColor: '#edf1e8',
+  },
+  stackFront: {
+    left: 10,
+    right: 10,
+    backgroundColor: '#f5f7f1',
+  },
+  remaining: {
+    paddingTop: 28,
+    fontSize: 12,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: '#728174',
+  },
   card: {
     flexShrink: 1,
     minHeight: 0,
