@@ -25,7 +25,7 @@ export function createNoticeActions(
       return syncAfter(repository.saveNotice(noticeId));
     },
     dismissNotice(noticeId) {
-      return repository.dismissNotice(noticeId);
+      return syncAfter(repository.dismissNotice(noticeId));
     },
     unsaveNotice(noticeId) {
       return syncAfter(repository.unsaveNotice(noticeId));

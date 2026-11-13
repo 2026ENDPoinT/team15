@@ -49,6 +49,7 @@ import {
 } from '../domain/campusProfile';
 import {
   attendanceFollowUpEnded,
+  eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
 } from '../domain/dates';
@@ -154,7 +155,7 @@ function SwipeCard({
     },
     (dx, dy) => {
       if (bucket === 'saved') {
-        if (dx <= -56) actRef.current('unselect');
+        if (dx <= -56) actRef.current('discard');
         reset();
         return;
       }
@@ -233,7 +234,7 @@ function SwipeCard({
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="← 선택 취소" onPress={() => act('unselect')} />
+            <Button label="← 휴지통으로 이동" onPress={() => act('discard')} />
           ) : (
             <>
               {bucket === 'unseen' && (
@@ -292,8 +293,6 @@ export default function CampusApp() {
     reminderWarning,
     refreshNotices,
     demoNewNoticeId,
-    demoStatus,
-    refreshDemoNotice,
     analyzeNotice,
     profile,
     saveProfile,
@@ -500,8 +499,7 @@ export default function CampusApp() {
       discard: actions.dismissNotice,
       select: actions.saveNotice,
       restore: actions.restoreNotice,
-      unselect: actions.unsaveNotice,
-    }[action as 'delete' | 'discard' | 'select' | 'restore' | 'unselect'];
+    }[action as 'delete' | 'discard' | 'select' | 'restore'];
     if (!write || changing.current) return false;
     changing.current = true;
     try {
@@ -520,7 +518,6 @@ export default function CampusApp() {
           discard: '휴지통으로 옮겼어요.',
           select: '선택한 공지에 추가했어요.',
           restore: '맞춤 공지로 복구했어요.',
-          unselect: '선택을 취소했어요.',
         } as Record<string, string>
       )[action] ?? '',
     );
@@ -554,6 +551,12 @@ export default function CampusApp() {
             detail?.raw.bodyText,
           ) ||
           recruitmentEnded(notice.title, currentEvents, now) ||
+          eventNoticeEnded(
+            notice.title,
+            detail?.raw.bodyText ?? '',
+            currentEvents,
+            now,
+          ) ||
           attendanceFollowUpEnded(
             notice.title,
             currentEvents,
@@ -594,7 +597,6 @@ export default function CampusApp() {
         <View style={s.detailActions}>
           {(
             [
-              { progress: 'saved', label: '관심 저장' },
               { progress: 'preparing', label: '준비 중' },
               { progress: 'applied', label: '신청 완료' },
             ] as const
@@ -607,7 +609,11 @@ export default function CampusApp() {
               <Button
                 key={progress}
                 half
-                label={`${label}으로 변경`}
+                label={
+                  progress === 'applied'
+                    ? '신청 완료로 변경'
+                    : `${label}으로 변경`
+                }
                 disabled={detailUpdating}
                 onPress={() =>
                   void updateDetail(notice.id, () =>
@@ -793,7 +799,6 @@ export default function CampusApp() {
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <Text style={s.brand}>GongMoa</Text>
-        <Text style={s.demo}>캠퍼스 공지 · 데모</Text>
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
@@ -866,8 +871,6 @@ export default function CampusApp() {
                           page === 1 ? hasAnalysisAccess : null,
                           page === 1 ? analyzePendingNotices : null,
                           page === 1 || page === 2 ? demoNewNoticeId : null,
-                          page === 1 ? refreshDemoNotice : null,
-                          page === 1 ? demoStatus : null,
                         ]),
                   ]}
                   render={() => {
@@ -975,12 +978,6 @@ export default function CampusApp() {
                                       : '갱신 상태'
                               }
                             >
-                              {refreshDemoNotice && (
-                                <Button
-                                  label="시연 공지 새로고침"
-                                  onPress={() => void refreshDemoNotice()}
-                                />
-                              )}
                               {syncStatus.phase === 'collecting' && (
                                 <Text
                                   accessibilityLiveRegion="polite"
@@ -1089,14 +1086,7 @@ export default function CampusApp() {
                                     : ''}
                                 </Text>
                               ))}
-                              {!!demoStatus && (
-                                <Text
-                                  accessibilityLiveRegion="polite"
-                                  style={s.reason}
-                                >
-                                  {demoStatus}
-                                </Text>
-                              )}
+
                               {!!syncStatus.message && (
                                 <Text style={s.reason}>
                                   {syncStatus.message}
@@ -1160,16 +1150,6 @@ export default function CampusApp() {
                             contentContainerStyle={s.content}
                             keyboardShouldPersistTaps="handled"
                           >
-                            <Text style={s.eyebrow}>
-                              {
-                                [
-                                  'A / TRASH',
-                                  'B / DISCOVER',
-                                  'C / HOME',
-                                  'D / SETTINGS',
-                                ][page]
-                              }
-                            </Text>
                             <Text accessibilityRole="header" style={s.title}>
                               {
                                 [
@@ -1192,7 +1172,7 @@ export default function CampusApp() {
                             </Text>
                             {demoPreview && (
                               <View style={s.card}>
-                                <Text style={s.tag}>새 맞춤 공지 · 시연</Text>
+                                <Text style={s.tag}>새 맞춤 공지</Text>
                                 <Text
                                   accessibilityRole="header"
                                   style={s.section}
@@ -1710,9 +1690,6 @@ export default function CampusApp() {
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
-            <Text style={[s.navLetter, page === i && s.light]}>
-              {['A', 'B', 'C', 'D'][i]}
-            </Text>
             <Text style={[s.buttonText, page === i && s.light]}>{name}</Text>
           </Pressable>
         ))}
@@ -1730,7 +1707,7 @@ export default function CampusApp() {
             <Text style={s.section}>사용 방법 안내</Text>
             <Text style={s.description}>
               {
-                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
+                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요. 메인에서 카드를 왼쪽으로 밀면 휴지통으로 이동해요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
               }
             </Text>
 
@@ -1786,13 +1763,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   brand: { fontSize: 30, fontWeight: '900', color: '#213e32' },
-  demo: {
-    backgroundColor: '#e0efaa',
-    borderRadius: 20,
-    padding: 7,
-    fontSize: 10,
-    color: green,
-  },
   content: {
     padding: 28,
     gap: 16,
@@ -1801,7 +1771,6 @@ const s = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: 40,
   },
-  eyebrow: { color: green, fontSize: 10, letterSpacing: 2, fontWeight: '800' },
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
@@ -1907,8 +1876,13 @@ const s = StyleSheet.create({
     padding: 12,
     gap: 5,
   },
-  navItem: { flex: 1, alignItems: 'center', padding: 8, gap: 3 },
-  navLetter: { color: green, fontSize: 16, fontWeight: '800' },
+  navItem: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
   toast: {
     backgroundColor: '#213e32',
     padding: 14,

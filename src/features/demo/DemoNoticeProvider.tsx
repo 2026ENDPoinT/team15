@@ -47,7 +47,8 @@ import type { NotificationSnapshot } from './noticeDetailPresentation';
 import { developerToolsEnabled } from '../verification/developerTools';
 
 const dataListeners = new Set<() => Promise<void>>();
-const demoEnabled = process.env.EXPO_PUBLIC_NOTICE_DEMO === '1';
+const demoEnabled =
+  developerToolsEnabled && process.env.EXPO_PUBLIC_NOTICE_DEMO === '1';
 const demoPostId = '999999991';
 const demoNoticeId = normalNoticeFixture.notice.id.replace(
   /[^:]+$/,
