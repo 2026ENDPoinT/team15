@@ -71,11 +71,14 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await page
     .getByRole('button', { name: '공지 새로고침', exact: true })
     .click();
+  await page
+    .getByRole('button', { name: '공지 갱신 상태', exact: true })
+    .click();
   await expect(
-    page.getByText('분석 완료 0 / 2건', { exact: true }),
+    page.getByText('AI 분석 중 · 0 / 2건', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('분석 중 1건 · 대기 1건 · 실패 0건 · 분석 불가 0건', {
+    page.getByText('대기 1', {
       exact: true,
     }),
   ).toBeVisible();
@@ -103,11 +106,12 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   ).toHaveCount(0);
   releaseAnalysis();
   await expect(
-    page.getByText('분석 완료 2 / 2건', { exact: true }),
+    page.getByText('AI 분석 · 2 / 2건', { exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(
-    page.getByText('공지 갱신 대기 중', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: '공지 새로고침', exact: true }),
+  ).toBeEnabled();
   // The title is taken from the public HTML fixture, not an authored display sample.
   const actualCsTitle = page.getByText(
     '컴퓨터공학과 취업준비 멘토링2 EPiC 신청-선착순 29명(안내-장학금지급)',

@@ -31,6 +31,11 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(scholarship).toHaveCount(0);
   await navigateTo('메인');
   await navigateTo('맞춤 공지');
+  await expect(scholarship).toHaveCount(0);
+  await page
+    .getByTestId('discover-card')
+    .getByRole('button', { name: '↕ 보류', exact: true })
+    .click();
   await expect(scholarship).toBeVisible();
   await page
     .getByTestId('discover-card')

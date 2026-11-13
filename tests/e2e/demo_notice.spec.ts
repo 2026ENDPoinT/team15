@@ -16,8 +16,12 @@ test('시연 새로고침이 관심 공지를 첫 카드와 메인에 표시한�
   await expect(page.getByText('설정이 자동 저장됐어요.')).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await page
+    .getByRole('button', { name: '공지 갱신 상태', exact: true })
+    .click();
+  await page
     .getByRole('button', { name: '시연 공지 새로고침', exact: true })
     .click();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   const card = page.getByTestId('discover-card');
   await expect(card.getByText('새 공지', { exact: true })).toBeVisible();
   await expect(

@@ -12,7 +12,8 @@ import {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 
 export const PageGestureContext = createContext<ReturnType<
@@ -86,9 +87,10 @@ export function useCardMotion(
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }],
   }));
-  const reset = () => {
-    x.value = withSpring(0, { damping: 20 });
-    y.value = withSpring(0, { damping: 20 });
+  const reset = (animated = true) => {
+    const config = { duration: 160, easing: Easing.out(Easing.cubic) };
+    x.value = animated ? withTiming(0, config) : 0;
+    y.value = animated ? withTiming(0, config) : 0;
   };
   return { gesture, style, x, y, reset };
 }
