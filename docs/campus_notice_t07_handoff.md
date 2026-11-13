@@ -118,4 +118,4 @@ npm run sync:smoke
 
 Node 24.22.3에서 타입 검사·자동 테스트 117건·Prettier와 Chromium UI 테스트 9건을 통과했다. UI 테스트는 AI 응답을 지연시켜 원문 카드가 나오지 않는 것과 0/2 진행 표시, 완료 후 카드 노출을 확인한다. 변경 후 AI 실패 시 저장 카드를 숨기고 재분석 성공 후 체크·신청 상태와 함께 복원하는 시나리오도 검증한다. 새 Android 실기기 검증은 수행하지 않았다. 후속 e2 운영 배포와 버전 불일치 복구는 [T05 8절](campus_notice_t05_handoff.md#8-e2-운영-배포와-버전-불일치-복구-2026-11-14)에 기록했다.
 
-PR 통합 시 최신 main `bd08609`의 단과대학 필터·프로필 영속화·공지 UI를 함께 반영했다. 요약 중복 제거와 카드별 신청 상태 버튼을 유지하면서 일정 원문/후보 표시를 결합했다. 통합 후 `npm run check` 120건과 웹 UI 10건을 확인했다. UI 테스트는 상태 변경 버튼을 해당 공지 카드 안에서 찾도록 보정했다. 화면 예시는 [분석 진행 상황](screenshots/notice_analysis_progress.png)과 [추정 일정 카드](screenshots/notice_inferred_dates.png)에 보관한다. 캡처 HTML·기록된 AI 응답을 사용하는 브라우저 테스트 화면이며, 진행 화면의 일부 수집 실패는 fixture 범위 밖 공지에 대한 mock 응답이다.
+PR 통합 시 최신 main `f2f4df0`의 단과대학 필터·프로필 영속화·공지 UI·시연 알림·종료 공지 제외 기능를 함께 반영했다. 요약 중복 제거와 카드별 신청 상태 버튼을 유지하면서 일정 원문/후보 표시를 결합했다. 통합 후 `npm run check` 122건과 시연 모드를 활성화한 웹 UI 11건을 확인했다. UI 테스트는 상태 변경 버튼을 해당 공지 카드 안에서 찾도록 보정했다. 화면 예시는 [분석 진행 상황](screenshots/notice_analysis_progress.png)과 [추정 일정 카드](screenshots/notice_inferred_dates.png)에 보관한다. 캡처 HTML·기록된 AI 응답을 사용하는 브라우저 테스트 화면이며, 진행 화면의 일부 수집 실패는 fixture 범위 밖 공지에 대한 mock 응답이다.

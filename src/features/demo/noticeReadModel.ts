@@ -69,7 +69,7 @@ export function toNoticeCard(
       analysis?.summary ??
       (record.notice.bodyText.slice(0, 180) ||
         '원문에서 내용을 확인해 주세요.'),
-    synthetic: false,
+    synthetic: !isLiveNotice(record.notice),
     analysisLabel: detail.analysisFresh
       ? '분석 완료'
       : analysis

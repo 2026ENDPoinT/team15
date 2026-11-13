@@ -22,6 +22,7 @@ import {
   deadlineNotifications,
   requestNotificationPermission,
   scheduleTestNotification,
+  showDemoNoticeNotification,
 } from '../../platform/deadlineNotifications';
 import { reminderFireAt } from '../../domain/dates';
 import { demoNotice } from './demoNotice';
@@ -37,6 +38,7 @@ import {
   isNoticeCardReady,
   toNoticeCard,
 } from './noticeReadModel';
+import { matchesCollege } from '../../domain/collegeFilter';
 import {
   defaultCampusProfile,
   type CampusProfile,
@@ -44,6 +46,14 @@ import {
 import type { NotificationSnapshot } from './noticeDetailPresentation';
 
 const dataListeners = new Set<() => Promise<void>>();
+const demoEnabled = process.env.EXPO_PUBLIC_NOTICE_DEMO === '1';
+const demoPostId = '999999991';
+const demoNoticeId = normalNoticeFixture.notice.id.replace(
+  /[^:]+$/,
+  demoPostId,
+);
+const demoTitle = '정보통신대학 장학금 신청 안내';
+const demoBody = '신청 대상: 정보통신대학 재학생\n발표용 가상 공지입니다.';
 let reminderWarning: string | null = null;
 
 async function openDemoRepository() {
@@ -202,15 +212,23 @@ async function readState(repository: Repository) {
   }
   const reminders = await repository.listReminders();
   const home = await repository.getHomeModel();
+  if (!demoEnabled) {
+    home.notices = home.notices.filter(({ id }) => id !== demoNoticeId);
+    home.schedule = home.schedule.filter(
+      ({ noticeId }) => noticeId !== demoNoticeId,
+    );
+  }
   const checklist = await repository.getChecklist(demoNotice.id);
   const records = await repository.listNoticeRecords();
   const entries = await Promise.all(
-    records.map(async (record) => ({
-      id: record.notice.id,
-      record,
-      detail: await repository.getNoticeDetail(record.notice.id),
-      checklist: await repository.getChecklist(record.notice.id),
-    })),
+    records
+      .filter(({ notice }) => notice.id !== demoNoticeId || demoEnabled)
+      .map(async (record) => ({
+        id: record.notice.id,
+        record,
+        detail: await repository.getNoticeDetail(record.notice.id),
+        checklist: await repository.getChecklist(record.notice.id),
+      })),
   );
   return {
     home,
@@ -253,6 +271,9 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   clearAnalysisToken(): Promise<void>;
   refreshNotices(): Promise<void>;
   analyzePendingNotices(): Promise<void>;
+  demoNewNoticeId: string | null;
+  demoStatus: string | null;
+  refreshDemoNotice: (() => Promise<void>) | null;
   analyzeNotice(id: string): Promise<void>;
   saveProfile(profile: CampusProfile): Promise<void>;
   refreshReminders(): Promise<void>;
@@ -274,6 +295,9 @@ const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
 
 export function DemoNoticeProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<Awaited<ReturnType<typeof readState>>>();
+  const demoRunning = useRef(false);
+  const [demoNewNoticeId, setDemoNewNoticeId] = useState<string | null>(null);
+  const [demoStatus, setDemoStatus] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [hasAnalysisAccess, setHasAnalysisAccess] = useState(false);
@@ -416,12 +440,78 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
           (await getRepository()).sync.resetAccess();
           setHasAnalysisAccess(false);
         },
+        demoNewNoticeId,
+        demoStatus,
         refreshNotices: async () => {
           await (await getRepository()).sync.refreshNotices('manual');
         },
         analyzePendingNotices: async () => {
           await (await getRepository()).sync.analyzePendingNotices();
         },
+        refreshDemoNotice: demoEnabled
+          ? async () => {
+              if (demoRunning.current) return;
+              demoRunning.current = true;
+              let loaded = false;
+              setDemoStatus(null);
+              try {
+                const { repository } = await getRepository();
+                const profile =
+                  (await repository.getProfile()) ?? defaultCampusProfile;
+                const raw = collectedNoticeSchema.parse({
+                  ...normalNoticeFixture.notice,
+                  id: demoNoticeId,
+                  postId: demoPostId,
+                  sourceUrl:
+                    'https://example.invalid/synthetic/notices/' + demoPostId,
+                  title: demoTitle,
+                  bodyText: demoBody,
+                  fetchedAt: new Date().toISOString(),
+                  publishedDate: null,
+                  extractedLinks: [],
+                  attachments: [],
+                  hasBodyImages: false,
+                });
+                const contentHash = await hashNoticeContent(
+                  toAnalyzeNoticeRequest(raw),
+                  (text) =>
+                    digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+                );
+                await repository.upsertRawNotice({ ...raw, contentHash });
+                await repository.unsaveNotice(demoNoticeId);
+                await repository.restoreNotice(demoNoticeId);
+                const matched =
+                  matchesCollege(profile.college, demoTitle, demoBody) &&
+                  profile.keywords.some(
+                    (keyword) =>
+                      demoTitle.includes(keyword) || demoBody.includes(keyword),
+                  );
+                setDemoNewNoticeId(matched ? demoNoticeId : null);
+                await reloadState(repository);
+                loaded = true;
+                if (!matched) {
+                  setDemoStatus(
+                    '시연 공지가 저장된 단과대학·키워드에 맞지 않아요.',
+                  );
+                  return;
+                }
+                const notified = await showDemoNoticeNotification(demoTitle);
+                setDemoStatus(
+                  notified
+                    ? '관심사에 맞는 새 공지가 올라왔어요. 3초 뒤 기기 알림을 예약했어요.'
+                    : '관심사에 맞는 새 공지가 올라왔어요. 기기 알림을 사용할 수 없어요.',
+                );
+              } catch {
+                setDemoStatus(
+                  loaded
+                    ? '시연 공지는 불러왔지만 기기 알림을 표시하지 못했어요.'
+                    : '시연 공지를 불러오지 못했어요. 다시 시도해 주세요.',
+                );
+              } finally {
+                demoRunning.current = false;
+              }
+            }
+          : null,
         analyzeNotice: async (id) => {
           await (await getRepository()).sync.analyzeNotice(id);
         },

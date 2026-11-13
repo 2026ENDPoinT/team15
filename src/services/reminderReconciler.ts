@@ -1,5 +1,5 @@
 import type { NoticeRepository, ReminderRecord } from '../db/noticeRepository';
-import { reminderFireAt } from '../domain/dates';
+import { recruitmentEnded, reminderFireAt } from '../domain/dates';
 
 interface ReminderRequest {
   key: string;
@@ -45,6 +45,7 @@ export function createReminderReconciler(
       if (
         !allowed ||
         notice.progress === 'applied' ||
+        recruitmentEnded(notice.title, notice.events, now) ||
         !shouldSchedule(notice.id)
       )
         continue;
