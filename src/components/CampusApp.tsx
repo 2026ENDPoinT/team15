@@ -74,11 +74,13 @@ const names = ['휴지통', '맞춤 공지', '메인', '설정'];
 const green = '#28634d';
 function Button({
   label,
+  accessibilityLabel = label,
   onPress,
   primary = false,
   disabled = false,
 }: {
   label: string;
+  accessibilityLabel?: string;
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
@@ -86,7 +88,7 @@ function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -101,6 +103,7 @@ function SwipeCard({
   bucket,
   act,
   detailContent,
+  progressContent,
   eligibilityLabel,
   onDragging,
 }: {
@@ -108,6 +111,7 @@ function SwipeCard({
   bucket: Bucket;
   act: (action: string) => void;
   detailContent: ReactNode;
+  progressContent?: ReactNode;
   eligibilityLabel: string;
   onDragging: (dragging: boolean) => void;
 }) {
@@ -178,6 +182,7 @@ function SwipeCard({
             ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
             : '정확한 일정은 원문에서 확인'}
         </Text>
+        {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
             <Button label="선택 취소" onPress={() => act('unselect')} />
@@ -197,6 +202,7 @@ function SwipeCard({
             </>
           )}
         </View>
+        {expanded && bucket === 'saved' && detailContent}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
@@ -207,7 +213,7 @@ function SwipeCard({
             {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
           </Text>
         </Pressable>
-        {expanded && detailContent}
+        {expanded && bucket !== 'saved' && detailContent}
       </Reanimated.View>
     </GestureDetector>
   );
@@ -463,6 +469,47 @@ export default function CampusApp() {
       setDetailUpdating(false);
     }
   }
+  function renderNoticeProgress(notice: Notice) {
+    const selectedDetail = details[notice.id];
+    if (selectedDetail?.disposition !== 'saved') return null;
+    return (
+      <View style={{ gap: 8 }}>
+        <Text style={s.muted}>
+          신청 상태 ·{' '}
+          {selectedDetail.progress === 'applied'
+            ? '신청 완료'
+            : selectedDetail.progress === 'preparing'
+              ? '준비 중'
+              : '관심 저장'}
+        </Text>
+        {selectedDetail.progress !== 'preparing' && (
+          <Button
+            label="준비 중으로 변경"
+            disabled={detailUpdating}
+            onPress={() =>
+              void updateDetail(notice.id, () =>
+                actions.setProgress(notice.id, 'preparing'),
+              )
+            }
+          />
+        )}
+        {selectedDetail.progress !== 'applied' && (
+          <Button
+            label="신청 완료로 변경"
+            disabled={detailUpdating}
+            onPress={() =>
+              void updateDetail(notice.id, () =>
+                actions.setProgress(notice.id, 'applied'),
+              )
+            }
+          />
+        )}
+        {detailErrors[notice.id] && (
+          <Text accessibilityRole="alert">변경 내용을 저장하지 못했어요.</Text>
+        )}
+      </View>
+    );
+  }
   function renderNoticeDetails(notice: Notice) {
     const selectedDetail = details[notice.id];
     const selectedChecklist = checklists[notice.id];
@@ -477,9 +524,11 @@ export default function CampusApp() {
       >
         <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
           <Text style={s.section}>상세 내용</Text>
-          <Text
-            style={s.description}
-          >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time ? `${notice.time} KST` : '시각 미확인'}` : '일정 미정 · 원문 확인 필요'}\n\n${notice.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : notice.analysisLabel}`}</Text>
+          {notice.synthetic && (
+            <Text style={s.description}>
+              가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
+            </Text>
+          )}
           <Text style={s.reason}>
             {eligibilityLabels[eligibility[notice.id]!.result]} ·{' '}
             {eligibility[notice.id]!.reasons.join(' ')}
@@ -616,41 +665,6 @@ export default function CampusApp() {
                   onPress={() => void updateDetail(notice.id, refreshReminders)}
                 />
               </View>
-              <Text style={s.muted}>
-                신청 상태 ·{' '}
-                {selectedDetail.progress === 'applied'
-                  ? '신청 완료'
-                  : selectedDetail.progress === 'preparing'
-                    ? '준비 중'
-                    : '관심 저장'}
-              </Text>
-              {selectedDetail.progress !== 'preparing' && (
-                <Button
-                  label="준비 중으로 변경"
-                  disabled={detailUpdating}
-                  onPress={() =>
-                    void updateDetail(notice.id, () =>
-                      actions.setProgress(notice.id, 'preparing'),
-                    )
-                  }
-                />
-              )}
-              {selectedDetail.progress !== 'applied' && (
-                <Button
-                  label="신청 완료로 변경"
-                  disabled={detailUpdating}
-                  onPress={() =>
-                    void updateDetail(notice.id, () =>
-                      actions.setProgress(notice.id, 'applied'),
-                    )
-                  }
-                />
-              )}
-              {detailErrors[notice.id] && (
-                <Text accessibilityRole="alert">
-                  변경 내용을 저장하지 못했어요.
-                </Text>
-              )}
             </>
           )}
         </View>
@@ -953,7 +967,8 @@ export default function CampusApp() {
                               <View style={s.card}>
                                 <View style={s.between}>
                                   <Button
-                                    label="이전 달"
+                                    label="<"
+                                    accessibilityLabel="이전 달"
                                     onPress={() => {
                                       setMonth(
                                         new Date(
@@ -970,7 +985,8 @@ export default function CampusApp() {
                                     {month.getMonth() + 1}월
                                   </Text>
                                   <Button
-                                    label="다음 달"
+                                    label=">"
+                                    accessibilityLabel="다음 달"
                                     onPress={() => {
                                       setMonth(
                                         new Date(
@@ -1130,6 +1146,7 @@ export default function CampusApp() {
                                     bucket={bucket}
                                     onDragging={onCardDragging}
                                     act={(action) => act(n.id, action)}
+                                    progressContent={renderNoticeProgress(n)}
                                     detailContent={renderNoticeDetails(n)}
                                   />
                                 ))}
