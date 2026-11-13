@@ -292,8 +292,6 @@ export default function CampusApp() {
     reminderWarning,
     refreshNotices,
     demoNewNoticeId,
-    demoStatus,
-    refreshDemoNotice,
     analyzeNotice,
     profile,
     saveProfile,
@@ -793,7 +791,6 @@ export default function CampusApp() {
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <Text style={s.brand}>GongMoa</Text>
-        <Text style={s.demo}>캠퍼스 공지 · 데모</Text>
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
@@ -866,8 +863,6 @@ export default function CampusApp() {
                           page === 1 ? hasAnalysisAccess : null,
                           page === 1 ? analyzePendingNotices : null,
                           page === 1 || page === 2 ? demoNewNoticeId : null,
-                          page === 1 ? refreshDemoNotice : null,
-                          page === 1 ? demoStatus : null,
                         ]),
                   ]}
                   render={() => {
@@ -975,12 +970,6 @@ export default function CampusApp() {
                                       : '갱신 상태'
                               }
                             >
-                              {refreshDemoNotice && (
-                                <Button
-                                  label="시연 공지 새로고침"
-                                  onPress={() => void refreshDemoNotice()}
-                                />
-                              )}
                               {syncStatus.phase === 'collecting' && (
                                 <Text
                                   accessibilityLiveRegion="polite"
@@ -1089,14 +1078,7 @@ export default function CampusApp() {
                                     : ''}
                                 </Text>
                               ))}
-                              {!!demoStatus && (
-                                <Text
-                                  accessibilityLiveRegion="polite"
-                                  style={s.reason}
-                                >
-                                  {demoStatus}
-                                </Text>
-                              )}
+
                               {!!syncStatus.message && (
                                 <Text style={s.reason}>
                                   {syncStatus.message}
@@ -1160,16 +1142,6 @@ export default function CampusApp() {
                             contentContainerStyle={s.content}
                             keyboardShouldPersistTaps="handled"
                           >
-                            <Text style={s.eyebrow}>
-                              {
-                                [
-                                  'A / TRASH',
-                                  'B / DISCOVER',
-                                  'C / HOME',
-                                  'D / SETTINGS',
-                                ][page]
-                              }
-                            </Text>
                             <Text accessibilityRole="header" style={s.title}>
                               {
                                 [
@@ -1192,7 +1164,7 @@ export default function CampusApp() {
                             </Text>
                             {demoPreview && (
                               <View style={s.card}>
-                                <Text style={s.tag}>새 맞춤 공지 · 시연</Text>
+                                <Text style={s.tag}>새 맞춤 공지</Text>
                                 <Text
                                   accessibilityRole="header"
                                   style={s.section}
@@ -1710,9 +1682,6 @@ export default function CampusApp() {
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
-            <Text style={[s.navLetter, page === i && s.light]}>
-              {['A', 'B', 'C', 'D'][i]}
-            </Text>
             <Text style={[s.buttonText, page === i && s.light]}>{name}</Text>
           </Pressable>
         ))}
@@ -1786,13 +1755,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   brand: { fontSize: 30, fontWeight: '900', color: '#213e32' },
-  demo: {
-    backgroundColor: '#e0efaa',
-    borderRadius: 20,
-    padding: 7,
-    fontSize: 10,
-    color: green,
-  },
   content: {
     padding: 28,
     gap: 16,
@@ -1801,7 +1763,6 @@ const s = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: 40,
   },
-  eyebrow: { color: green, fontSize: 10, letterSpacing: 2, fontWeight: '800' },
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
@@ -1907,8 +1868,13 @@ const s = StyleSheet.create({
     padding: 12,
     gap: 5,
   },
-  navItem: { flex: 1, alignItems: 'center', padding: 8, gap: 3 },
-  navLetter: { color: green, fontSize: 16, fontWeight: '800' },
+  navItem: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
   toast: {
     backgroundColor: '#213e32',
     padding: 14,

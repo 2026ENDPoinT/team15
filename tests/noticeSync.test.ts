@@ -456,7 +456,7 @@ test('v1 migration과 재실행 복구는 저장 기록을 보존하고 running�
       (await repository.getNoticeDetail(normal.id))!.disposition,
       'saved',
     );
-    assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, 3);
+    assert.equal(db.prepare('PRAGMA user_version').get()!.user_version, 4);
     assert.equal(
       (await repository.getNoticeDetail(normal.id))!.progress,
       'preparing',

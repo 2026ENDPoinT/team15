@@ -5,7 +5,8 @@ import { ActionButton, Screen, styles } from '../../src/components/ui';
 import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function DeveloperToolsScreen() {
-  const { testNotification, reservationStatus } = useDemoNotice();
+  const { testNotification, reservationStatus, refreshDemoNotice, demoStatus } =
+    useDemoNotice();
   const running = useRef(false);
   const [message, setMessage] = useState('');
   async function run(action: () => Promise<string>) {
@@ -36,6 +37,24 @@ export default function DeveloperToolsScreen() {
         label="T09 변경·알림 검증 열기"
         onPress={() => router.push('/dev/t09')}
       />
+      {refreshDemoNotice && (
+        <View style={styles.panel}>
+          <ActionButton
+            label="시연 공지 새로고침"
+            onPress={() =>
+              run(async () => {
+                await refreshDemoNotice();
+                return '';
+              })
+            }
+          />
+          {!!demoStatus && (
+            <Text accessibilityLiveRegion="polite" style={styles.body}>
+              {demoStatus}
+            </Text>
+          )}
+        </View>
+      )}
       {testNotification && (
         <ActionButton
           label="10초 뒤 테스트 알림"
