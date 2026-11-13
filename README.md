@@ -23,7 +23,7 @@ T01의 Expo 앱 뼈대와 역할 C의 공통 계약·가상 샘플을 구현했�
 
 ## 2 설치와 개발
 
-팀 권장 버전은 **Node.js 24.22.3**이며 `.nvmrc`에 고정한다. 최초 계약은 Node.js 22.23.5로 검증했고 앱은 Node 24에서 검증한다. `engines`는 호환 하한을, `.nvmrc`는 팀 공통 버전을 나타낸다. Expo SDK 57·React Native 0.86.3·React 19.2.3과 `package-lock.json`을 함께 사용한다.
+팀 권장 버전은 **Node.js 24.22.3**이며 `.nvmrc`에 고정한다. 최초 계약은 Node.js 22.23.5로 검증했고 앱은 Node 24에서 검증한다. `engines`는 호환 하한을, `.nvmrc`는 팀 공통 버전을 나타낸다. Expo SDK 58·React Native 0.88.1·React 19.3.0과 `package-lock.json`을 함께 사용한다.
 
 ```sh
 nvm install
@@ -32,7 +32,7 @@ npm ci
 npm run start
 ```
 
-Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 저장·해제는 현재 실행 중에만 유지된다.
+SDK 58을 지원하는 Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 기존 SDK 57 작업 환경에서는 `npm ci` 후 `npm run start -- --clear`로 Metro 캐시를 초기화한다. SDK 버전이 맞지 않으면 [Expo Go 다운로드](https://expo.dev/go)에서 SDK 58용 앱을 확인한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 저장·해제는 현재 실행 중에만 유지된다.
 
 ```sh
 npm run typecheck

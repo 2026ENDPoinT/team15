@@ -7,25 +7,29 @@ test('같은 공지를 홈·찾기·상세에서 보고 관심 저장 상태를 
 }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  // SDK 58 Router는 비활성 화면을 DOM에 남기고 inert로 상호작용을 막는다.
+  const activeElements = page.locator(':not([inert], [inert] *)');
+  const noticeLink = page
+    .getByRole('link', { name: `${title} 상세 보기`, exact: true })
+    .and(activeElements);
+  const unsaveButton = page
+    .getByRole('button', { name: '관심 해제', exact: true })
+    .and(activeElements);
   await page.goto('/');
   await expect(page.getByText('저장한 공지', { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: `${title} 상세 보기`, exact: true }),
-  ).toBeVisible();
+  await expect(noticeLink).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('home.png'),
     fullPage: true,
   });
 
   await page.getByRole('tab', { name: '공지 찾기' }).click();
-  await expect(
-    page.getByRole('link', { name: `${title} 상세 보기`, exact: true }),
-  ).toBeVisible();
+  await expect(noticeLink).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('discover.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: '관심 해제', exact: true }).click();
+  await unsaveButton.click();
   await expect(
     page.getByRole('button', { name: '관심 저장', exact: true }),
   ).toBeVisible();
@@ -35,28 +39,22 @@ test('같은 공지를 홈·찾기·상세에서 보고 관심 저장 상태를 
   await page.getByRole('button', { name: '공지 찾으러 가기' }).click();
   await page.getByRole('button', { name: '관심 저장', exact: true }).click();
   await page.getByRole('tab', { name: '홈', exact: true }).click();
-  await expect(
-    page.getByRole('link', { name: `${title} 상세 보기`, exact: true }),
-  ).toBeVisible();
+  await expect(noticeLink).toBeVisible();
 
-  await page
-    .getByRole('link', { name: `${title} 상세 보기`, exact: true })
-    .click();
+  await noticeLink.click();
   await expect(page.getByText('어떤 활동인가요?')).toBeVisible();
   await expect(page.getByText('• 참가 신청서 준비')).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('detail.png'),
     fullPage: true,
   });
-  await page.getByRole('button', { name: '관심 해제', exact: true }).click();
+  await unsaveButton.click();
   await page.getByRole('button', { name: '뒤로 가기' }).click();
   await expect(page.getByText('아직 저장한 공지가 없어요')).toBeVisible();
 
   // T01의 메모리 상태는 실행을 새로 시작하면 초기 샘플로 복원된다.
   await page.reload();
-  await expect(
-    page.getByRole('link', { name: `${title} 상세 보기`, exact: true }),
-  ).toBeVisible();
+  await expect(noticeLink).toBeVisible();
   expect(errors).toEqual([]);
 });
 
