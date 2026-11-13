@@ -19,6 +19,17 @@
     "web": {
       "bundler": "metro",
       "output": "single"
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "d2e26c56-fc29-496e-9271-ad6fa98c7521"
+      }
+    },
+    "owner": "tyuseres-team"
   }
 }

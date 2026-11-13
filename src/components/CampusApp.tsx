@@ -63,6 +63,7 @@ import {
   eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
+  titleDeadlinePassed,
 } from '../domain/dates';
 import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
@@ -595,6 +596,12 @@ export default function CampusApp() {
             detail?.raw.bodyText,
           ) ||
           recruitmentEnded(notice.title, currentEvents, now) ||
+          titleDeadlinePassed(
+            notice.title,
+            detail?.raw.publishedDate ?? null,
+            currentEvents,
+            now,
+          ) ||
           eventNoticeEnded(
             notice.title,
             detail?.raw.bodyText ?? '',
