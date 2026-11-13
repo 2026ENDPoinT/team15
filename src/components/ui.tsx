@@ -29,7 +29,7 @@ export function DemoBanner() {
     <View style={styles.banner}>
       <Text style={styles.bannerTitle}>가상 공지로 체험 중</Text>
       <Text style={styles.caption}>
-        실제 모집 정보가 아니며, 다시 실행하면 처음 상태로 돌아갑니다.
+        실제 모집 정보가 아니며, 저장과 체크 상태는 이 기기에 보관됩니다.
       </Text>
     </View>
   );

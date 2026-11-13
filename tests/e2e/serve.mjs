@@ -12,6 +12,7 @@ const mime = {
   '.png': 'image/png',
   '.ttf': 'font/ttf',
   '.ico': 'image/x-icon',
+  '.wasm': 'application/wasm',
 };
 
 createServer(async (req, res) => {
@@ -28,6 +29,8 @@ createServer(async (req, res) => {
     const body = await readFile(file);
     res.writeHead(200, {
       'Content-Type': mime[extname(file)] ?? 'application/octet-stream',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     });
     res.end(body);
   } catch {
