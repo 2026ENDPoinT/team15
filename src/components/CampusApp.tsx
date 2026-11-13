@@ -50,10 +50,7 @@ import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
 import { AnalysisSettings } from './AnalysisSettings';
-import {
-  detailReviewNotes,
-  deadlineReminderLabel,
-} from '../features/demo/noticeDetailPresentation';
+import { deadlineReminderLabel } from '../features/demo/noticeDetailPresentation';
 
 import type { Disposition as Bucket } from '../../shared/contracts';
 import { evaluateEligibility } from '../domain/eligibility';
@@ -538,10 +535,11 @@ export default function CampusApp() {
               가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
             </Text>
           )}
-          <Text style={s.reason}>
-            {eligibilityLabels[eligibility[notice.id]!.result]} ·{' '}
-            {eligibility[notice.id]!.reasons.join(' ')}
-          </Text>
+          {eligibility[notice.id]!.result !== 'needs_review' && (
+            <Text style={s.reason}>
+              {eligibilityLabels[eligibility[notice.id]!.result]}
+            </Text>
+          )}
           {!notice.synthetic && selectedDetail && (
             <>
               <View style={s.detailActions}>
@@ -564,26 +562,15 @@ export default function CampusApp() {
                   }}
                 />
               </View>
-              {detailReviewNotes(
-                selectedDetail.analysisFresh
-                  ? (selectedDetail.analysis?.data.review_notes ?? [])
-                  : [],
-                selectedDetail.raw.hasBodyImages ||
-                  selectedDetail.raw.attachments.length > 0,
-              ).map((note) => (
-                <Text key={note} style={s.reason}>
-                  {note}
-                </Text>
-              ))}
               {selectedDetail.analysisFresh &&
-                selectedDetail.analysis?.data.events.map((event, index) => (
-                  <Text key={index} style={s.description}>
-                    {event.label} ·{' '}
-                    {event.status === 'resolved'
-                      ? `${event.date}${event.time ? ` ${event.time}` : ''}`
-                      : '날짜 확인 필요'}
-                  </Text>
-                ))}
+                selectedDetail.analysis?.data.events
+                  .filter((event) => event.status === 'resolved')
+                  .map((event, index) => (
+                    <Text key={index} style={s.description}>
+                      {event.label} · {event.date}
+                      {event.time ? ` ${event.time}` : ''}
+                    </Text>
+                  ))}
               {!selectedDetail.analysis && (
                 <Text selectable style={s.description}>
                   {selectedDetail.raw.bodyText}
