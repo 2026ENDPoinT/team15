@@ -290,7 +290,10 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
     | 'setProgress'
     | 'setChecklistCompleted'
     | 'acknowledgeDeadlineChange'
-  > & { restoreNotice(id: string): Promise<void> };
+  > & {
+    restoreNotice(id: string): Promise<void>;
+    deleteNotice(id: string): Promise<void>;
+  };
 };
 
 const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
@@ -417,6 +420,8 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
     },
     unsaveNotice: (id) => update((actions) => actions.unsaveNotice(id)),
     dismissNotice: (id) => update((actions) => actions.dismissNotice(id)),
+    deleteNotice: (id) =>
+      update((_, repository) => repository.deleteNotice(id)),
     restoreNotice: (id) =>
       update((_, repository) => repository.restoreNotice(id)),
     setProgress: (id, progress) =>

@@ -320,3 +320,29 @@ test('단과대학, 내 정보와 키워드를 저장하고 DB 재실행 후 복
     rmdirSync(dir);
   }
 });
+
+test('영구 삭제는 휴지통에만 적용되고 재수집 및 저장소 재초기화 후에도 복원되지 않는다', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    let repository = await openRepository(db);
+    const { notice } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.deleteNotice(notice.id);
+    assert.equal((await repository.listNoticeRecords()).length, 1);
+    await repository.dismissNotice(notice.id);
+    await repository.restoreNotice(notice.id);
+    assert.equal(
+      (await repository.listNoticeRecords())[0]?.disposition,
+      'unseen',
+    );
+    await repository.dismissNotice(notice.id);
+    await repository.deleteNotice(notice.id);
+    assert.equal((await repository.listNoticeRecords()).length, 0);
+    await repository.upsertRawNotice(notice);
+    repository = await openRepository(db);
+    await repository.restoreNotice(notice.id);
+    assert.equal((await repository.listNoticeRecords()).length, 0);
+  } finally {
+    db.close();
+  }
+});

@@ -47,6 +47,7 @@ export function useCardMotion(
   onStart: () => void,
   onRelease: (dx: number, dy: number) => void,
   onCancel: () => void,
+  direction: 'all' | 'left' | 'horizontal' = 'all',
 ) {
   const page = useContext(PageGestureContext);
   const scroll = useContext(ScrollGestureContext);
@@ -60,7 +61,7 @@ export function useCardMotion(
     .onStart(() => {
       cancelAnimation(x);
       cancelAnimation(y);
-      axis.value = 0;
+      axis.value = direction === 'all' ? 0 : 1;
       runOnJS(onStart)();
     })
     .onUpdate((event) => {
@@ -73,8 +74,14 @@ export function useCardMotion(
           Math.abs(event.translationX) > Math.abs(event.translationY) * 1.5
             ? 1
             : 2;
-      x.value = axis.value === 1 ? event.translationX : 0;
-      y.value = axis.value === 2 ? event.translationY : 0;
+      x.value =
+        axis.value === 1
+          ? direction === 'left'
+            ? Math.min(0, event.translationX)
+            : event.translationX
+          : 0;
+      y.value =
+        direction === 'all' && axis.value === 2 ? event.translationY : 0;
     })
     .onEnd(() => {
       runOnJS(onRelease)(x.value, y.value);
@@ -82,6 +89,10 @@ export function useCardMotion(
     .onFinalize((_, success) => {
       if (!success) runOnJS(onCancel)();
     });
+  // Saved cards claim horizontal drags only; vertical movement must fail
+  // before activation so the surrounding ScrollView can take over.
+  if (direction !== 'all')
+    gesture.activeOffsetX([-16, 16]).failOffsetY([-12, 12]);
   if (page) gesture.blocksExternalGesture(page);
   if (scroll) gesture.blocksExternalGesture(scroll);
   const style = useAnimatedStyle(() => ({
