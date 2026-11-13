@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { NoticeDetailModal } from './NoticeDetailModal';
 import { NoticeMemoEditor } from './NoticeMemoEditor';
 import { ChecklistEditor } from './ChecklistEditor';
@@ -97,6 +98,12 @@ function DetailOnOpen({
   return <>{children}</>;
 }
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
+const tabIcons = [
+  ['trash-outline', 'trash'],
+  ['compass-outline', 'compass'],
+  ['home-outline', 'home'],
+  ['settings-outline', 'settings'],
+] as const;
 function SwipeCard({
   notice,
   bucket,
@@ -1572,11 +1579,17 @@ export default function CampusApp() {
               disabled: pageTransitioning,
             }}
             disabled={pageTransitioning}
-
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
-            <Text style={[s.buttonText, page === i && s.light]}>{name}</Text>
+            <Ionicons
+              name={tabIcons[i]![page === i ? 1 : 0]}
+              size={22}
+              color={page === i ? '#fff' : '#28634d'}
+              accessible={false}
+              aria-hidden
+            />
+            <Text style={[s.navLabel, page === i && s.light]}>{name}</Text>
           </Pressable>
         ))}
       </View>
