@@ -1,4 +1,5 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -10,5 +11,15 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["shared/**/*.ts", "fixtures/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "shared/**/*.ts",
+    "fixtures/**/*.ts",
+    "tests/**/*.ts",
+    "expo-env.d.ts",
+    "playwright.config.ts",
+    ".expo/types/**/*.ts"
+  ]
 }
