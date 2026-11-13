@@ -200,3 +200,87 @@ export function attendanceFollowUpEnded(
     })
   );
 }
+
+function pastEventDatesInBody(
+  titleYears: string[],
+  body: string,
+  today: string,
+): boolean {
+  const lines = body
+    .normalize('NFKC')
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const match = line
+        .trim()
+        .match(
+          /^(?:(?:\d+[.)]|[-•*])\s*)?(?:(?:행사|강연|프로그램|교육)\s*)?일시\s*:\s*(.*)$/,
+        );
+      return match?.[1] ? [match[1]] : [];
+    });
+  return (
+    lines.length > 0 &&
+    lines.every((line) => {
+      const match = line.match(
+        /^(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*월\s*(\d{1,2})\s*일(?:\s*\(([일월화수목금토])(?:요일)?\))?(?:\s*(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[~∼–—-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)?\s*$/,
+      );
+      if (!match) return false;
+      const [, explicitYear, month, day, weekday] = match;
+      const year =
+        explicitYear ??
+        (titleYears.length === 1 && weekday ? titleYears[0] : undefined);
+      if (!year) return false;
+      const date =
+        year + '-' + month!.padStart(2, '0') + '-' + day!.padStart(2, '0');
+      const parsed = new Date(date);
+      return (
+        Number.isFinite(parsed.getTime()) &&
+        parsed.toISOString().slice(0, 10) === date &&
+        (!weekday || '일월화수목금토'[parsed.getUTCDay()] === weekday) &&
+        date < today
+      );
+    })
+  );
+}
+
+export function eventNoticeEnded(
+  title: string,
+  body: string,
+  events: ExtractedEvent[],
+  now: Date,
+): boolean {
+  const today = new Date(now.getTime() + seoulOffsetMs)
+    .toISOString()
+    .slice(0, 10);
+  const schedule = events.filter(
+    ({ type }) => type === 'event_start' || type === 'event_end',
+  );
+  if (events.some(({ date }) => date && date >= today)) return false;
+  const titleYears = [...new Set(title.match(/20\d{2}(?=\s*(?:학년도|년))/g))];
+  if (pastEventDatesInBody(titleYears, body, today)) {
+    // Received dates must agree that the program has passed.
+    return schedule.every(({ date }) => !date || date < today);
+  }
+  if (!schedule.length) return false;
+  const source = normalizeText(body);
+  return schedule.every((event) => {
+    if (!event.date || event.date >= today) return false;
+    if (event.status === 'resolved') return true;
+    const [year, month, day] = event.date.split('-');
+    const evidence = normalizeText(event.evidence);
+    if (!source.includes(evidence)) return false;
+    const date = new RegExp(
+      '(?:^|[^0-9])0?' +
+        Number(month) +
+        '\\s*월\\s*0?' +
+        Number(day) +
+        '\\s*일\\s*\\(([일월화수목금토])(?:요일)?\\)',
+    );
+    const match = evidence.match(date);
+    return (
+      titleYears.length === 1 &&
+      titleYears[0] === year &&
+      !!match &&
+      match[1] === '일월화수목금토'[new Date(event.date).getUTCDay()]
+    );
+  });
+}

@@ -73,7 +73,7 @@ export default function DeveloperToolsScreen() {
           <Text style={styles.caption}>
             메인에서 가상 해커톤 공지를 선택하고 신청 상태를 준비 중으로 바꾼 뒤
             예약하세요. 테스트 알림은 5분 뒤에 예정돼요. 확인 후 신청 완료 또는
-            선택 취소로 예약을 정리하세요.
+            휴지통으로 이동해 예약을 정리하세요.
           </Text>
           {([true, false] as const).map((enable) => (
             <ActionButton

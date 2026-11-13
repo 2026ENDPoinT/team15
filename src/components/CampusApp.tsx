@@ -49,6 +49,7 @@ import {
 } from '../domain/campusProfile';
 import {
   attendanceFollowUpEnded,
+  eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
 } from '../domain/dates';
@@ -154,7 +155,7 @@ function SwipeCard({
     },
     (dx, dy) => {
       if (bucket === 'saved') {
-        if (dx <= -56) actRef.current('unselect');
+        if (dx <= -56) actRef.current('discard');
         reset();
         return;
       }
@@ -233,7 +234,7 @@ function SwipeCard({
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="<- 선택 취소" onPress={() => act('unselect')} />
+            <Button label="← 휴지통으로 이동" onPress={() => act('discard')} />
           ) : (
             <>
               {bucket === 'unseen' && (
@@ -498,8 +499,7 @@ export default function CampusApp() {
       discard: actions.dismissNotice,
       select: actions.saveNotice,
       restore: actions.restoreNotice,
-      unselect: actions.unsaveNotice,
-    }[action as 'delete' | 'discard' | 'select' | 'restore' | 'unselect'];
+    }[action as 'delete' | 'discard' | 'select' | 'restore'];
     if (!write || changing.current) return false;
     changing.current = true;
     try {
@@ -518,7 +518,6 @@ export default function CampusApp() {
           discard: '휴지통으로 옮겼어요.',
           select: '선택한 공지에 추가했어요.',
           restore: '맞춤 공지로 복구했어요.',
-          unselect: '선택을 취소했어요.',
         } as Record<string, string>
       )[action] ?? '',
     );
@@ -552,6 +551,12 @@ export default function CampusApp() {
             detail?.raw.bodyText,
           ) ||
           recruitmentEnded(notice.title, currentEvents, now) ||
+          eventNoticeEnded(
+            notice.title,
+            detail?.raw.bodyText ?? '',
+            currentEvents,
+            now,
+          ) ||
           attendanceFollowUpEnded(
             notice.title,
             currentEvents,
@@ -592,7 +597,6 @@ export default function CampusApp() {
         <View style={s.detailActions}>
           {(
             [
-              { progress: 'saved', label: '관심 저장' },
               { progress: 'preparing', label: '준비 중' },
               { progress: 'applied', label: '신청 완료' },
             ] as const
@@ -605,7 +609,11 @@ export default function CampusApp() {
               <Button
                 key={progress}
                 half
-                label={`${label}으로 변경`}
+                label={
+                  progress === 'applied'
+                    ? '신청 완료로 변경'
+                    : `${label}으로 변경`
+                }
                 disabled={detailUpdating}
                 onPress={() =>
                   void updateDetail(notice.id, () =>
@@ -1699,7 +1707,7 @@ export default function CampusApp() {
             <Text style={s.section}>사용 방법 안내</Text>
             <Text style={s.description}>
               {
-                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
+                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요. 메인에서 카드를 왼쪽으로 밀면 휴지통으로 이동해요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
               }
             </Text>
 
