@@ -2,6 +2,7 @@ import { normalNoticeFixture } from '../../../fixtures/synthetic/notices';
 
 export type Notice = {
   id: string;
+  sourceUrl?: string;
   title: string;
   org: string;
   tags: string[];
