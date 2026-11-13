@@ -135,6 +135,7 @@ export interface NoticeDetail {
     | 'attachments'
     | 'hasBodyImages'
     | 'sourceUpdatedAt'
+    | 'publishedDate'
   >;
 }
 
@@ -723,13 +724,15 @@ export async function createNoticeRepository(
           > &
             AnalysisColumns & {
               rawJson: string;
+              publishedDate: string | null;
               deadlineBaseline: string | null;
             }
         >(
           `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
                   n.analysis_status AS analysisStatus, n.last_error AS lastError,
                   COALESCE(u.disposition, 'unseen') AS disposition, u.progress,
-                  n.raw_json AS rawJson, u.deadline_baseline_hash AS deadlineBaseline,
+                  n.raw_json AS rawJson, n.published_date AS publishedDate,
+                  u.deadline_baseline_hash AS deadlineBaseline,
                   ${analysisColumns}
            FROM notices n LEFT JOIN user_notices u ON u.notice_id = n.id WHERE n.id = ?`,
           [noticeId],
@@ -737,6 +740,7 @@ export async function createNoticeRepository(
         if (!row) return null;
         const {
           rawJson,
+          publishedDate,
           analysisJson,
           contentHash,
           deadlineBaseline,
@@ -752,7 +756,7 @@ export async function createNoticeRepository(
             deadlineBaseline;
         return {
           ...notice,
-          raw: JSON.parse(rawJson),
+          raw: { ...JSON.parse(rawJson), publishedDate },
           analysis,
           analysisFresh,
           deadlineChanged,

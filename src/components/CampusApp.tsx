@@ -45,7 +45,11 @@ import {
   type College,
   type CampusProfile,
 } from '../domain/campusProfile';
-import { recruitmentEnded } from '../domain/dates';
+import {
+  attendanceFollowUpEnded,
+  gatheringEnded,
+  recruitmentEnded,
+} from '../domain/dates';
 import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
@@ -471,10 +475,23 @@ export default function CampusApp() {
     notices
       .filter((notice) => {
         const detail = details[notice.id];
-        return recruitmentEnded(
-          notice.title,
-          detail?.analysisFresh ? (detail.analysis?.data.events ?? []) : [],
-          now,
+        const currentEvents = detail?.analysisFresh
+          ? (detail.analysis?.data.events ?? [])
+          : [];
+        return (
+          gatheringEnded(
+            notice.title,
+            detail?.raw.publishedDate ?? null,
+            now,
+            detail?.raw.bodyText,
+          ) ||
+          recruitmentEnded(notice.title, currentEvents, now) ||
+          attendanceFollowUpEnded(
+            notice.title,
+            currentEvents,
+            now,
+            detail?.raw.bodyText,
+          )
         );
       })
       .map(({ id }) => id),

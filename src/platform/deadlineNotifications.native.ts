@@ -134,20 +134,13 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export async function showDemoNoticeNotification(
   title: string,
 ): Promise<boolean> {
-  const demoChannelId = 'demo-new-notices-v1';
-  if (useCustomChannel) {
-    await Notifications.setNotificationChannelAsync(demoChannelId, {
-      name: '시연용 새 공지',
-      importance: Notifications.AndroidImportance.HIGH,
-    });
-  }
+  // Use the same host notification channel as the device delivery test.
   if (!(await requestNotificationPermission())) return false;
   await Notifications.scheduleNotificationAsync({
     content: { title: '관심사에 맞는 새 공지가 올라왔어요', body: title },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: 3,
-      ...(useCustomChannel ? { channelId: demoChannelId } : {}),
     },
   });
   return true;

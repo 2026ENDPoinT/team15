@@ -501,7 +501,8 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
                     ? '관심사에 맞는 새 공지가 올라왔어요. 3초 뒤 기기 알림을 예약했어요.'
                     : '관심사에 맞는 새 공지가 올라왔어요. 기기 알림을 사용할 수 없어요.',
                 );
-              } catch {
+              } catch (error) {
+                console.warn('시연 공지 새로고침 실패', error);
                 setDemoStatus(
                   loaded
                     ? '시연 공지는 불러왔지만 기기 알림을 표시하지 못했어요.'
