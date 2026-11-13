@@ -96,7 +96,11 @@ export async function collectDetail(
 export async function collectSource(
   sourceId: SourceId,
   dependencies: CollectorDependencies,
-  options: { maxPages?: number; maxNotices?: number } = {},
+  options: {
+    maxPages?: number;
+    maxNotices?: number;
+    onNotice?: (notice: CollectedNotice) => Promise<void>;
+  } = {},
 ): Promise<CollectionResult> {
   const maxPages = options.maxPages ?? 1;
   const maxNotices = options.maxNotices ?? 30;
@@ -149,14 +153,16 @@ export async function collectSource(
     const outcomes = await Promise.allSettled(
       batch.map((ref) => collectDetail(ref, dependencies)),
     );
-    outcomes.forEach((outcome, offset) => {
+    for (const [offset, outcome] of outcomes.entries()) {
       const ref = batch[offset]!;
-      if (outcome.status === 'fulfilled') result.notices.push(outcome.value);
-      else
+      if (outcome.status === 'fulfilled') {
+        result.notices.push(outcome.value);
+        await options.onNotice?.(outcome.value);
+      } else
         result.failures.push(
           failure('detail', ref.sourceUrl, ref.id, outcome.reason),
         );
-    });
+    }
   }
   result.status = result.failures.length
     ? result.notices.length

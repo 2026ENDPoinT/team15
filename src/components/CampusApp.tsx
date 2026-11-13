@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -6,12 +7,14 @@ import {
   type ComponentRef,
   type ReactNode,
 } from 'react';
+
 import { router } from 'expo-router';
 import {
   Animated,
   Easing,
   Keyboard,
   Modal,
+  Linking,
   PanResponder,
   Pressable,
   ScrollView,
@@ -23,10 +26,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { notices, type Notice } from '../features/demo/campusNotices';
+import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
+import { AnalysisSettings } from './AnalysisSettings';
+
 import type { Disposition as Bucket } from '../../shared/contracts';
+function DetailOnOpen({
+  onOpen,
+  children,
+}: {
+  onOpen: () => void;
+  children: ReactNode;
+}) {
+  const openRef = useRef(onOpen);
+  useEffect(() => {
+    openRef.current();
+  }, []);
+  return <>{children}</>;
+}
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
 const green = '#28634d';
 function Button({
@@ -54,12 +72,14 @@ function SwipeCard({
   bucket,
   act,
   detailContent,
+
   onDragging,
 }: {
   notice: Notice;
   bucket: Bucket;
   act: (action: string) => void;
   detailContent: ReactNode;
+
   onDragging: (dragging: boolean) => void;
 }) {
   const position = useRef(new Animated.ValueXY()).current;
@@ -68,6 +88,7 @@ function SwipeCard({
   actRef.current = act;
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
   const reset = () => {
     axis.current = null;
     setDragging(false);
@@ -122,6 +143,7 @@ function SwipeCard({
       }),
     [bucket, position, onDragging],
   );
+
   return (
     <Animated.View
       style={[
@@ -140,6 +162,9 @@ function SwipeCard({
         </Text>
       </View>
       <Text style={s.cardTitle}>{notice.title}</Text>
+      <Text style={s.muted}>
+        {notice.synthetic ? '가상 예시' : `실제 공지 · ${notice.analysisLabel}`}
+      </Text>
       <View style={s.row}>
         {notice.tags.map((tag) => (
           <Text key={tag} style={s.tag}>
@@ -150,7 +175,7 @@ function SwipeCard({
       <Text style={s.reason}>{notice.summary}</Text>
       <Text style={s.muted}>
         {notice.date
-          ? `${notice.date} · ${notice.time} KST`
+          ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
           : '정확한 일정은 원문에서 확인'}
       </Text>
       <View style={s.row}>
@@ -195,6 +220,13 @@ export default function CampusApp() {
     checklists,
     testNotification,
     reservationStatus,
+    notices,
+    home,
+    syncState,
+    syncStatus,
+    refreshNotices,
+    analyzeNotice,
+    setKeywords,
   } = useDemoNotice();
   const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
@@ -270,6 +302,7 @@ export default function CampusApp() {
       setPageTransitioning(false);
     });
   };
+
   const navigate = (next: number) => {
     if (
       next < 0 ||
@@ -353,10 +386,12 @@ export default function CampusApp() {
     );
     return true;
   };
-  const saved = notices.filter((n) => buckets[n.id] === 'saved');
+  const [showAll, setShowAll] = useState(false);
+
   const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
-  const events = saved.filter(
-    (n) => n.date?.startsWith(prefix) && (!picked || n.date === picked),
+  const events = home.schedule.filter(
+    (event) =>
+      event.date.startsWith(prefix) && (!picked || event.date === picked),
   );
   const [detailErrors, setDetailErrors] = useState<Record<string, boolean>>({});
   async function updateDetail(id: string, write: () => Promise<void>) {
@@ -375,65 +410,142 @@ export default function CampusApp() {
     const selectedDetail = details[notice.id];
     const selectedChecklist = checklists[notice.id];
     return (
-      <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
-        <Text style={s.section}>상세 내용</Text>
-        <Text
-          style={s.description}
-        >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time} KST` : '일정 미정 · 원문 확인 필요'}\n\n가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.`}</Text>
-        {selectedDetail?.disposition === 'saved' && (
-          <>
-            <Text style={s.section}>준비물</Text>
-            {selectedChecklist?.items.length ? (
-              selectedChecklist.items.map((item) => (
+      <DetailOnOpen
+        onOpen={() => {
+          if (!notice.synthetic)
+            void analyzeNotice(notice.id).catch(() =>
+              setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+            );
+        }}
+      >
+        <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
+          <Text style={s.section}>상세 내용</Text>
+          <Text
+            style={s.description}
+          >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time} KST` : '일정 미정 · 원문 확인 필요'}\n\n${notice.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : notice.analysisLabel}`}</Text>
+          {!notice.synthetic && selectedDetail && (
+            <>
+              <Button
+                label="공지 원문 열기"
+                onPress={() => {
+                  void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
+                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                  );
+                }}
+              />
+              <Button
+                label="분석 다시 시도"
+                onPress={() => {
+                  void analyzeNotice(notice.id).catch(() =>
+                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                  );
+                }}
+              />
+              <Text style={s.muted}>
+                {selectedDetail.raw.hasBodyImages ||
+                selectedDetail.raw.attachments.length
+                  ? '이미지·첨부 내용은 원문에서 직접 확인하세요.'
+                  : ''}
+              </Text>
+              {selectedDetail.analysisFresh &&
+                selectedDetail.analysis?.data.review_notes.map(
+                  (note, index) => (
+                    <Text key={`review-${index}`} style={s.reason}>
+                      {note}
+                    </Text>
+                  ),
+                )}
+              {selectedDetail.analysisFresh &&
+                selectedDetail.analysis?.data.events.map((event, index) => (
+                  <Text key={index} style={s.description}>
+                    {event.label} ·{' '}
+                    {event.status === 'resolved'
+                      ? `${event.date} ${event.time ?? '시각 미확인'}`
+                      : '날짜 확인 필요'}
+                  </Text>
+                ))}
+              {!selectedDetail.analysis && (
+                <Text selectable style={s.description}>
+                  {selectedDetail.raw.bodyText}
+                </Text>
+              )}
+              {selectedDetail.disposition !== 'saved' && (
                 <Button
-                  key={item.id}
-                  label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
+                  label="관심 저장"
                   onPress={() =>
                     void updateDetail(notice.id, () =>
-                      actions.setChecklistCompleted(item.id, !item.completed),
+                      actions.saveNotice(notice.id),
                     )
                   }
                 />
-              ))
-            ) : (
-              <Text style={s.muted}>확인된 준비물이 없어요.</Text>
-            )}
-            <Text style={s.muted}>
-              신청 상태 ·{' '}
-              {selectedDetail.progress === 'applied'
-                ? '신청 완료'
-                : selectedDetail.progress === 'preparing'
-                  ? '준비 중'
-                  : '관심 저장'}
-            </Text>
-            {selectedDetail.progress !== 'preparing' && (
-              <Button
-                label="준비 중으로 변경"
-                onPress={() =>
-                  void updateDetail(notice.id, () =>
-                    actions.setProgress(notice.id, 'preparing'),
-                  )
-                }
-              />
-            )}
-            {selectedDetail.progress !== 'applied' && (
-              <Button
-                label="신청 완료로 변경"
-                onPress={() =>
-                  void updateDetail(notice.id, () =>
-                    actions.setProgress(notice.id, 'applied'),
-                  )
-                }
-              />
-            )}
-            {detailErrors[notice.id] && (
-              <Text accessibilityRole="alert">
-                변경 내용을 저장하지 못했어요.
+              )}
+            </>
+          )}
+
+          {selectedDetail?.disposition === 'saved' && (
+            <>
+              <Text style={s.section}>준비물</Text>
+              {selectedChecklist?.updatedChecklist && (
+                <Text style={s.reason}>
+                  준비물이 변경되었어요. 기존 체크 기록은 유지합니다. 새 목록:{' '}
+                  {selectedChecklist.updatedChecklist
+                    .map(({ text }) => text)
+                    .join(', ')}
+                </Text>
+              )}
+
+              {selectedChecklist?.items.length ? (
+                selectedChecklist.items.map((item) => (
+                  <Button
+                    key={item.id}
+                    label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
+                    onPress={() =>
+                      void updateDetail(notice.id, () =>
+                        actions.setChecklistCompleted(item.id, !item.completed),
+                      )
+                    }
+                  />
+                ))
+              ) : (
+                <Text style={s.muted}>확인된 준비물이 없어요.</Text>
+              )}
+              <Text style={s.muted}>
+                신청 상태 ·{' '}
+                {selectedDetail.progress === 'applied'
+                  ? '신청 완료'
+                  : selectedDetail.progress === 'preparing'
+                    ? '준비 중'
+                    : '관심 저장'}
               </Text>
-            )}
-          </>
-        )}
-      </View>
+              {selectedDetail.progress !== 'preparing' && (
+                <Button
+                  label="준비 중으로 변경"
+                  onPress={() =>
+                    void updateDetail(notice.id, () =>
+                      actions.setProgress(notice.id, 'preparing'),
+                    )
+                  }
+                />
+              )}
+              {selectedDetail.progress !== 'applied' && (
+                <Button
+                  label="신청 완료로 변경"
+                  onPress={() =>
+                    void updateDetail(notice.id, () =>
+                      actions.setProgress(notice.id, 'applied'),
+                    )
+                  }
+                />
+              )}
+              {detailErrors[notice.id] && (
+                <Text accessibilityRole="alert">
+                  변경 내용을 저장하지 못했어요.
+                </Text>
+              )}
+            </>
+          )}
+        </View>
+      </DetailOnOpen>
     );
   }
   const addKey = () => {
@@ -451,6 +563,7 @@ export default function CampusApp() {
       <View style={s.header}>
         <Text style={s.brand}>GongMoa</Text>
         <Text style={s.demo}>캠퍼스 공지 · 데모</Text>
+
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
       <View style={s.pageViewport} {...pager.panHandlers}>
@@ -471,6 +584,7 @@ export default function CampusApp() {
                 buckets[n.id] === bucket &&
                 (page !== pageRef.current || !held.includes(n.id)) &&
                 (page !== 1 ||
+                  showAll ||
                   keys.some(
                     (k) =>
                       n.tags.includes(k) ||
@@ -506,6 +620,65 @@ export default function CampusApp() {
                       </Text>
                       <Text style={s.muted}>남은 공지 {visible.length}개</Text>
                     </View>
+                    <Button
+                      label={
+                        syncStatus.phase === 'idle'
+                          ? '실제 공지 새로고침'
+                          : '공지 갱신 중…'
+                      }
+                      onPress={() => {
+                        if (syncStatus.phase === 'idle') void refreshNotices();
+                      }}
+                    />
+                    <Button
+                      label={showAll ? '키워드 맞춤 보기' : '전체 공지 보기'}
+                      onPress={() => setShowAll(!showAll)}
+                    />
+                    <Text accessibilityLiveRegion="polite" style={s.muted}>
+                      {syncStatus.phase === 'collecting'
+                        ? '원문 수집 중 · 수집된 공지는 바로 확인할 수 있어요.'
+                        : syncStatus.phase === 'analyzing'
+                          ? 'AI 분석 중 · 공지를 먼저 저장할 수 있어요.'
+                          : '공지 갱신 대기 중'}
+                    </Text>
+                    {syncState.sources.map((source) => (
+                      <Text key={source.sourceId} style={s.muted}>
+                        {source.sourceId === 'seoultech_cs' ? '학과' : '본교'} ·
+                        마지막 전체 수집 성공:{' '}
+                        {source.lastSuccessAt
+                          ? new Date(source.lastSuccessAt).toLocaleString(
+                              'ko-KR',
+                              {
+                                timeZone: 'Asia/Seoul',
+                              },
+                            )
+                          : '아직 없음'}
+                        {source.lastError
+                          ? ` · 일부 수집 실패 (${source.detailFailures}건)`
+                          : ''}
+                      </Text>
+                    ))}
+                    {!!syncStatus.message && (
+                      <Text style={s.reason}>{syncStatus.message}</Text>
+                    )}
+                    {!!syncStatus.analysisRetryAt &&
+                      Date.parse(syncStatus.analysisRetryAt) > Date.now() && (
+                        <Text style={s.muted}>
+                          분석 재시도 가능:{' '}
+                          {new Date(syncStatus.analysisRetryAt).toLocaleString(
+                            'ko-KR',
+                            { timeZone: 'Asia/Seoul' },
+                          )}{' '}
+                          KST
+                        </Text>
+                      )}
+                    {__DEV__ && (
+                      <Button
+                        label="T02 수집 검증 열기"
+                        onPress={() => router.push('/dev/collection')}
+                      />
+                    )}
+
                     {nextNotice ? (
                       <DiscoverCard
                         key={nextNotice.id}
@@ -638,8 +811,8 @@ export default function CampusApp() {
                               const date =
                                 prefix + String(i + 1).padStart(2, '0');
                               const weekday = (month.getDay() + i) % 7;
-                              const hasEvent = saved.some(
-                                (n) => n.date === date,
+                              const hasEvent = home.schedule.some(
+                                (event) => event.date === date,
                               );
                               return (
                                 <Pressable
@@ -680,7 +853,10 @@ export default function CampusApp() {
                         <Text style={s.reason}>
                           {events.length
                             ? events
-                                .map((n) => `${n.date} ${n.time} · ${n.title}`)
+                                .map(
+                                  (event) =>
+                                    `${event.date} ${event.time ?? '시각 미확인'} · ${event.label} · ${event.title}`,
+                                )
                                 .join('\n')
                             : '선택한 일정이 없어요.'}
                         </Text>
@@ -731,6 +907,7 @@ export default function CampusApp() {
                       </>
                     ) : (
                       <>
+                        <AnalysisSettings />
                         <View style={s.card}>
                           <Text style={s.section}>내 정보</Text>
                           <Text style={s.muted}>학과</Text>
@@ -819,9 +996,11 @@ export default function CampusApp() {
                                         setDraft((old) =>
                                           old.filter((v) => v !== k),
                                         );
-                                        setKeys((old) =>
-                                          old.filter((v) => v !== k),
+                                        const nextKeys = keys.filter(
+                                          (v) => v !== k,
                                         );
+                                        setKeys(nextKeys);
+                                        setKeywords(nextKeys);
                                       } else {
                                         setDraft((old) =>
                                           old.includes(k)
@@ -902,6 +1081,7 @@ export default function CampusApp() {
                               return;
                             }
                             setKeys([...draft]);
+                            setKeywords([...draft]);
                             setMessage(
                               '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
                             );
@@ -979,14 +1159,9 @@ export default function CampusApp() {
                         )}
                       </>
                     )}
-                    {__DEV__ && page === 1 && (
-                      <Button
-                        label="T02 수집 검증 열기"
-                        onPress={() => router.push('/dev/collection')}
-                      />
-                    )}
                     <Text style={s.muted}>
-                      가상 예시 공지입니다. 공지 선택과 준비물 체크는 이 기기에
+                      가상 예시는 카드에 표시됩니다. 실제 공지의 내용은 원문에서
+                      확인하세요. 공지 선택과 준비물 체크는 이 기기에
                       저장됩니다.
                     </Text>
                   </ScrollView>
@@ -1020,6 +1195,7 @@ export default function CampusApp() {
               disabled: pageTransitioning || draggingPage || cardDragging,
             }}
             disabled={pageTransitioning || draggingPage || cardDragging}
+
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
@@ -1046,6 +1222,7 @@ export default function CampusApp() {
                 '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 다른 화면에 갔다 돌아오면 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
               }
             </Text>
+
             <Button
               label="닫기"
               primary
@@ -1076,6 +1253,7 @@ const s = StyleSheet.create({
     gap: 12,
     overflow: 'hidden',
   },
+
   pageViewport: { flex: 1, overflow: 'hidden' },
   safe: { flex: 1, backgroundColor: '#f7f8f3' },
   header: {
@@ -1221,6 +1399,8 @@ const s = StyleSheet.create({
   dialog: {
     width: '100%',
     maxWidth: 440,
+    maxHeight: '95%',
+    flexGrow: 0,
     alignSelf: 'center',
     backgroundColor: '#f7f8f3',
     borderRadius: 24,

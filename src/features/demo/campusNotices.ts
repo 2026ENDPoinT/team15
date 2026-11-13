@@ -2,12 +2,15 @@ import { normalNoticeFixture } from '../../../fixtures/synthetic/notices';
 
 export type Notice = {
   id: string;
+  sourceUrl?: string;
   title: string;
   org: string;
   tags: string[];
   date: string | null;
   time: string | null;
   summary: string;
+  synthetic?: boolean;
+  analysisLabel?: string;
 };
 export const notices: Notice[] = [
   {

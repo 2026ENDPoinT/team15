@@ -7,6 +7,7 @@ import {
   type Disposition,
   type Progress,
   type SourceId,
+  type AnalysisStatus,
 } from '../../shared/contracts';
 import { normalizeText } from '../../shared/canonicalize';
 import {
@@ -14,7 +15,8 @@ import {
   describeDate,
   type ResolvedEvent,
 } from '../domain/dates';
-import { migration1 } from './migrations';
+import { migration1, migration2 } from './migrations';
+import type { CollectionResult } from '../sources/collector';
 
 type BindValue = string | number | null;
 
@@ -38,7 +40,25 @@ export interface SavedNotice {
 
 export interface NoticeRepository {
   upsertRawNotice(notice: CollectedNotice): Promise<void>;
-  applyAnalysis(analysis: AnalysisEnvelope): Promise<boolean>;
+  applyAnalysis(
+    analysis: AnalysisEnvelope,
+    request?: AnalysisRequestKey,
+  ): Promise<boolean>;
+  listNoticeRecords(): Promise<NoticeRecord[]>;
+  beginAnalysis(request: AnalysisRequestKey): Promise<boolean>;
+  failAnalysis(
+    request: AnalysisRequestKey,
+    status: 'failed' | 'unsupported',
+    error: string,
+  ): Promise<boolean>;
+  recoverInterruptedAnalysis(): Promise<void>;
+  getSyncState(): Promise<{
+    sources: SourceSyncState[];
+    analysisRetryAt: string | null;
+  }>;
+  beginSourceSync(sourceId: SourceId, attemptedAt: string): Promise<void>;
+  finishSourceSync(result: CollectionResult): Promise<void>;
+  setAnalysisRetryAt(retryAt: string | null): Promise<void>;
   saveNotice(noticeId: string): Promise<void>;
   dismissNotice(noticeId: string): Promise<void>;
   restoreNotice(noticeId: string): Promise<void>;
@@ -53,10 +73,34 @@ export interface NoticeRepository {
   getHomeModel(
     now?: Date,
   ): Promise<{ notices: SavedNoticeWithAnalysis[]; schedule: ScheduleEntry[] }>;
+  listNoticeIds(): Promise<string[]>;
   getNoticeDetail(noticeId: string): Promise<NoticeDetail | null>;
   acknowledgeDeadlineChange(noticeId: string): Promise<void>;
   listReminders(): Promise<ReminderRecord[]>;
   persistReminder(reminder: ReminderRecord): Promise<void>;
+}
+
+export interface AnalysisRequestKey {
+  noticeId: string;
+  contentHash: string;
+  requestId: string;
+}
+
+export interface NoticeRecord {
+  notice: CollectedNotice;
+  disposition: Disposition;
+  progress: Progress | null;
+  analysisFresh: boolean;
+  analysisStatus: AnalysisStatus;
+  lastError: string | null;
+}
+
+export interface SourceSyncState {
+  sourceId: SourceId;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  detailFailures: number;
 }
 
 export interface ReminderRecord {
@@ -69,7 +113,7 @@ export interface ReminderRecord {
   error: string | null;
 }
 
-interface NoticeDetail {
+export interface NoticeDetail {
   id: string;
   title: string;
   sourceId: SourceId;
@@ -79,6 +123,8 @@ interface NoticeDetail {
   analysis: AnalysisEnvelope | null;
   analysisFresh: boolean;
   deadlineChanged: boolean;
+  analysisStatus: AnalysisStatus;
+  lastError: string | null;
   raw: Pick<
     CollectedNotice,
     | 'bodyText'
@@ -159,11 +205,12 @@ export async function createNoticeRepository(
     const version = await db.getFirstAsync<{ user_version: number }>(
       'PRAGMA user_version',
     );
-    if (version?.user_version === 1) return;
-    if (version?.user_version !== 0)
+    if (version?.user_version === 2) return;
+    if (version?.user_version !== 0 && version?.user_version !== 1)
       throw new Error('Unsupported notice database version');
-    await db.execAsync(migration1);
-    await db.execAsync('PRAGMA user_version = 1');
+    if (version.user_version === 0) await db.execAsync(migration1);
+    await db.execAsync(migration2);
+    await db.execAsync('PRAGMA user_version = 2');
   });
 
   let pending = Promise.resolve();
@@ -228,6 +275,153 @@ export async function createNoticeRepository(
   }
 
   return {
+    listNoticeRecords() {
+      return enqueue(async () => {
+        const rows = await db.getAllAsync<{
+          id: string;
+          sourceId: SourceId;
+          boardId: string;
+          postId: string;
+          sourceUrl: string;
+          title: string;
+          publishedDate: string | null;
+          fetchedAt: string;
+          rawJson: string;
+          contentHash: string;
+          analysisJson: string | null;
+          disposition: Disposition;
+          progress: Progress | null;
+          analysisStatus: AnalysisStatus;
+          lastError: string | null;
+        }>(`SELECT n.id, n.source_id AS sourceId, n.board_id AS boardId, n.post_id AS postId,
+          n.source_url AS sourceUrl, n.title, n.published_date AS publishedDate,
+          n.fetched_at AS fetchedAt, n.raw_json AS rawJson, ${analysisColumns},
+          n.analysis_status AS analysisStatus, n.last_error AS lastError,
+          COALESCE(u.disposition, 'unseen') AS disposition, u.progress
+          FROM notices n LEFT JOIN user_notices u ON u.notice_id = n.id
+          ORDER BY n.fetched_at DESC, n.id`);
+        return rows.map(
+          ({
+            rawJson,
+            analysisJson,
+            disposition,
+            progress,
+            analysisStatus,
+            lastError,
+            ...notice
+          }) => ({
+            notice: { ...notice, ...JSON.parse(rawJson) } as CollectedNotice,
+            disposition,
+            progress,
+            analysisStatus,
+            lastError,
+            analysisFresh: isFresh(
+              readAnalysis(analysisJson),
+              notice.contentHash,
+            ),
+          }),
+        );
+      });
+    },
+
+    beginAnalysis(request) {
+      return enqueue(async () => {
+        const result = await db.runAsync(
+          `UPDATE notices SET analysis_status = 'running',
+          analysis_request_id = ?, last_error = NULL WHERE id = ? AND content_hash = ?
+          AND NOT (analysis_json IS NOT NULL AND analyzed_content_hash IS content_hash
+            AND schema_version IS ? AND extractor_version IS ?)`,
+          [
+            request.requestId,
+            request.noticeId,
+            request.contentHash,
+            SCHEMA_VERSION,
+            EXTRACTOR_VERSION,
+          ],
+        );
+        return result.changes > 0;
+      });
+    },
+
+    failAnalysis(request, status, error) {
+      return enqueue(async () => {
+        const result = await db.runAsync(
+          `UPDATE notices SET analysis_status = ?, last_error = ?,
+          analysis_request_id = NULL WHERE id = ? AND content_hash = ? AND analysis_request_id = ?`,
+          [
+            status,
+            error,
+            request.noticeId,
+            request.contentHash,
+            request.requestId,
+          ],
+        );
+        return result.changes > 0;
+      });
+    },
+
+    recoverInterruptedAnalysis() {
+      return enqueue(async () => {
+        await db.runAsync(
+          `UPDATE notices SET analysis_status = 'pending', analysis_request_id = NULL
+          WHERE analysis_status = 'running'`,
+          [],
+        );
+      });
+    },
+
+    getSyncState() {
+      return enqueue(async () => ({
+        sources:
+          await db.getAllAsync<SourceSyncState>(`SELECT source_id AS sourceId,
+          last_attempt_at AS lastAttemptAt, last_success_at AS lastSuccessAt,
+          last_error AS lastError, detail_failures AS detailFailures FROM sync_state`),
+        analysisRetryAt:
+          (
+            await db.getFirstAsync<{ retryAt: string | null }>(
+              'SELECT analysis_retry_at AS retryAt FROM sync_control WHERE id = 1',
+            )
+          )?.retryAt ?? null,
+      }));
+    },
+
+    beginSourceSync(sourceId, attemptedAt) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `INSERT INTO sync_state (source_id, last_attempt_at) VALUES (?, ?)
+          ON CONFLICT(source_id) DO UPDATE SET last_attempt_at = excluded.last_attempt_at`,
+          [sourceId, attemptedAt],
+        );
+      });
+    },
+
+    finishSourceSync(result) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `UPDATE sync_state SET last_success_at = CASE WHEN ? = 'success'
+          THEN ? ELSE last_success_at END, last_error = ?, detail_failures = ?
+          WHERE source_id = ? AND last_attempt_at = ?`,
+          [
+            result.status,
+            result.completedAt,
+            result.failures[0]?.code ?? null,
+            result.failures.filter(({ stage }) => stage === 'detail').length,
+            result.sourceId,
+            result.attemptedAt,
+          ],
+        );
+      });
+    },
+
+    setAnalysisRetryAt(retryAt) {
+      return enqueue(async () => {
+        await db.runAsync(
+          'UPDATE sync_control SET analysis_retry_at = ? WHERE id = 1',
+          [retryAt],
+        );
+      });
+    },
+
     upsertRawNotice(notice) {
       return enqueue(async () => {
         const raw = JSON.stringify({
@@ -251,6 +445,8 @@ export async function createNoticeRepository(
              published_date = excluded.published_date,
              analysis_status = CASE WHEN notices.content_hash <> excluded.content_hash
                THEN 'pending' ELSE notices.analysis_status END,
+             analysis_request_id = CASE WHEN notices.content_hash <> excluded.content_hash
+               THEN NULL ELSE notices.analysis_request_id END,
              last_error = CASE WHEN notices.content_hash <> excluded.content_hash
                THEN NULL ELSE notices.last_error END
            WHERE julianday(excluded.fetched_at) >= julianday(notices.fetched_at)`,
@@ -270,17 +466,25 @@ export async function createNoticeRepository(
       });
     },
 
-    applyAnalysis(input) {
+    applyAnalysis(input, request) {
       return enqueue(async () => {
         const analysis = analysisEnvelopeSchema.parse(input);
         if (analysis.extractor_version !== EXTRACTOR_VERSION) return false;
+        if (
+          request &&
+          (request.noticeId !== analysis.notice_id ||
+            request.contentHash !== analysis.content_hash)
+        )
+          return false;
         let applied = false;
         await db.withTransactionAsync(async () => {
           const result = await db.runAsync(
             `UPDATE notices
              SET analysis_json = ?, analyzed_content_hash = ?, schema_version = ?,
-                 extractor_version = ?, analyzed_at = ?, analysis_status = 'ready', last_error = NULL
+                 extractor_version = ?, analyzed_at = ?, analysis_status = 'ready', last_error = NULL,
+                 analysis_request_id = NULL
              WHERE id = ? AND content_hash = ?
+               AND (? IS NULL OR analysis_request_id = ?)
                AND (analyzed_content_hash IS NOT content_hash OR extractor_version IS NOT ?
                  OR analyzed_at IS NULL OR julianday(analyzed_at) <= julianday(?))`,
             [
@@ -291,6 +495,8 @@ export async function createNoticeRepository(
               analysis.analyzed_at,
               analysis.notice_id,
               analysis.content_hash,
+              request?.requestId ?? null,
+              request?.requestId ?? null,
               analysis.extractor_version,
               analysis.analyzed_at,
             ],
@@ -448,6 +654,15 @@ export async function createNoticeRepository(
       });
     },
 
+    listNoticeIds() {
+      return enqueue(async () => {
+        const rows = await db.getAllAsync<{ id: string }>(
+          'SELECT id FROM notices ORDER BY published_date DESC, id',
+        );
+        return rows.map(({ id }) => id);
+      });
+    },
+
     getNoticeDetail(noticeId) {
       return enqueue(async () => {
         const row = await db.getFirstAsync<
@@ -461,6 +676,7 @@ export async function createNoticeRepository(
             }
         >(
           `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
+                  n.analysis_status AS analysisStatus, n.last_error AS lastError,
                   COALESCE(u.disposition, 'unseen') AS disposition, u.progress,
                   n.raw_json AS rawJson, u.deadline_baseline_hash AS deadlineBaseline,
                   ${analysisColumns}
