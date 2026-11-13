@@ -5,7 +5,8 @@ import { ActionButton, Screen, styles } from '../../src/components/ui';
 import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function DeveloperToolsScreen() {
-  const { testNotification, reservationStatus } = useDemoNotice();
+  const { testNotification, reservationStatus, refreshDemoNotice, demoStatus } =
+    useDemoNotice();
   const running = useRef(false);
   const [message, setMessage] = useState('');
   async function run(action: () => Promise<string>) {
@@ -36,6 +37,24 @@ export default function DeveloperToolsScreen() {
         label="T09 변경·알림 검증 열기"
         onPress={() => router.push('/dev/t09')}
       />
+      {refreshDemoNotice && (
+        <View style={styles.panel}>
+          <ActionButton
+            label="시연 공지 새로고침"
+            onPress={() =>
+              run(async () => {
+                await refreshDemoNotice();
+                return '';
+              })
+            }
+          />
+          {!!demoStatus && (
+            <Text accessibilityLiveRegion="polite" style={styles.body}>
+              {demoStatus}
+            </Text>
+          )}
+        </View>
+      )}
       {testNotification && (
         <ActionButton
           label="10초 뒤 테스트 알림"
@@ -54,7 +73,7 @@ export default function DeveloperToolsScreen() {
           <Text style={styles.caption}>
             메인에서 가상 해커톤 공지를 선택하고 신청 상태를 준비 중으로 바꾼 뒤
             예약하세요. 테스트 알림은 5분 뒤에 예정돼요. 확인 후 신청 완료 또는
-            선택 취소로 예약을 정리하세요.
+            휴지통으로 이동해 예약을 정리하세요.
           </Text>
           {([true, false] as const).map((enable) => (
             <ActionButton

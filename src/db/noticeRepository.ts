@@ -636,7 +636,7 @@ export async function createNoticeRepository(
           `INSERT INTO user_notices (notice_id, disposition, updated_at)
            VALUES (?, 'dismissed', ?)
            ON CONFLICT(notice_id) DO UPDATE SET disposition = 'dismissed',
-             updated_at = excluded.updated_at WHERE user_notices.disposition = 'unseen'`,
+             updated_at = excluded.updated_at WHERE user_notices.disposition IN ('unseen', 'saved')`,
           [noticeId, new Date().toISOString()],
         );
       });

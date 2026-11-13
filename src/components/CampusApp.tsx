@@ -49,6 +49,7 @@ import {
 } from '../domain/campusProfile';
 import {
   attendanceFollowUpEnded,
+  eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
 } from '../domain/dates';
@@ -154,7 +155,7 @@ function SwipeCard({
     },
     (dx, dy) => {
       if (bucket === 'saved') {
-        if (dx <= -56) actRef.current('unselect');
+        if (dx <= -56) actRef.current('discard');
         reset();
         return;
       }
@@ -233,7 +234,7 @@ function SwipeCard({
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="← 선택 취소" onPress={() => act('unselect')} />
+            <Button label="← 휴지통으로 이동" onPress={() => act('discard')} />
           ) : (
             <>
               {bucket === 'unseen' && (
@@ -292,14 +293,22 @@ export default function CampusApp() {
     reminderWarning,
     refreshNotices,
     demoNewNoticeId,
-    demoStatus,
-    refreshDemoNotice,
     analyzeNotice,
     profile,
     discoveredKeywords,
     saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
+  const changingNotices = useRef(new Set<string>());
+  const [pendingNoticeIds, setPendingNoticeIds] = useState<string[]>([]);
+  // Keep processed cards out of the queue until a repository snapshot confirms
+  // their new bucket. A background reload can supersede the action's reload.
+  useEffect(() => {
+    setPendingNoticeIds((old) => {
+      const next = old.filter((id) => buckets[id] === 'unseen');
+      return next.length === old.length ? old : next;
+    });
+  }, [buckets]);
   const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
   const options = Array.from(
@@ -521,18 +530,21 @@ export default function CampusApp() {
       discard: actions.dismissNotice,
       select: actions.saveNotice,
       restore: actions.restoreNotice,
-      unselect: actions.unsaveNotice,
-    }[action as 'delete' | 'discard' | 'select' | 'restore' | 'unselect'];
-    if (!write || changing.current) return false;
-    changing.current = true;
+    }[action as 'delete' | 'discard' | 'select' | 'restore'];
+    if (!write || changingNotices.current.has(id)) return false;
+    changingNotices.current.add(id);
+    if (action === 'select' || action === 'discard') {
+      setPendingNoticeIds((old) => [...old, id]);
+    }
     try {
       await write(id);
       setDeferredNoticeIds((old) => old.filter((entry) => entry !== id));
     } catch {
+      setPendingNoticeIds((old) => old.filter((entry) => entry !== id));
       setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
       return false;
     } finally {
-      changing.current = false;
+      changingNotices.current.delete(id);
     }
     setMessage(
       (
@@ -541,7 +553,6 @@ export default function CampusApp() {
           discard: '휴지통으로 옮겼어요.',
           select: '선택한 공지에 추가했어요.',
           restore: '맞춤 공지로 복구했어요.',
-          unselect: '선택을 취소했어요.',
         } as Record<string, string>
       )[action] ?? '',
     );
@@ -575,6 +586,12 @@ export default function CampusApp() {
             detail?.raw.bodyText,
           ) ||
           recruitmentEnded(notice.title, currentEvents, now) ||
+          eventNoticeEnded(
+            notice.title,
+            detail?.raw.bodyText ?? '',
+            currentEvents,
+            now,
+          ) ||
           attendanceFollowUpEnded(
             notice.title,
             currentEvents,
@@ -615,7 +632,6 @@ export default function CampusApp() {
         <View style={s.detailActions}>
           {(
             [
-              { progress: 'saved', label: '관심 저장' },
               { progress: 'preparing', label: '준비 중' },
               { progress: 'applied', label: '신청 완료' },
             ] as const
@@ -628,7 +644,11 @@ export default function CampusApp() {
               <Button
                 key={progress}
                 half
-                label={`${label}으로 변경`}
+                label={
+                  progress === 'applied'
+                    ? '신청 완료로 변경'
+                    : `${label}으로 변경`
+                }
                 disabled={detailUpdating}
                 onPress={() =>
                   void updateDetail(notice.id, () =>
@@ -647,6 +667,19 @@ export default function CampusApp() {
   function renderNoticeDetails(notice: Notice) {
     const selectedDetail = details[notice.id];
     const selectedChecklist = checklists[notice.id];
+    const analysis = selectedDetail?.analysisFresh
+      ? selectedDetail.analysis?.data
+      : undefined;
+    const conditions = analysis
+      ? [
+          ...new Set([
+            analysis.eligibility.departments.evidence,
+            analysis.eligibility.grades.evidence,
+            analysis.eligibility.enrollments.evidence,
+            ...analysis.eligibility.other_conditions,
+          ]),
+        ].filter((text): text is string => !!text)
+      : [];
     return (
       <DetailOnOpen
         onOpen={() => {
@@ -657,32 +690,97 @@ export default function CampusApp() {
         }}
       >
         <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
-          <Text style={s.section}>상세 내용</Text>
           {notice.synthetic && (
             <Text style={s.description}>
               가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
             </Text>
           )}
-          {eligibility[notice.id]!.result !== 'needs_review' && (
+          <Text style={s.description}>
+            {analysis?.summary ??
+              (notice.synthetic
+                ? notice.summary
+                : '공지 본문에서 내용을 확인해 주세요.')}
+          </Text>
+          <Text style={s.section}>신청 대상</Text>
+          <Text style={s.reason}>
+            {eligibilityLabels[eligibility[notice.id]!.result]}
+          </Text>
+          {conditions.length ? (
+            conditions.map((condition) => (
+              <Text key={condition} style={s.description}>
+                {condition}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.muted}>
+              확인된 자격 조건이 없어요. 원문에서 신청 대상을 확인해 주세요.
+            </Text>
+          )}
+          {eligibility[notice.id]!.reasons.map((reason) => (
+            <Text key={reason} style={s.muted}>
+              {reason}
+            </Text>
+          ))}
+          <Text style={s.section}>주요 일정</Text>
+          {analysis?.events.length ? (
+            analysis.events.map((event, index) => (
+              <Text key={index} style={s.description}>
+                {detailEventLabel(event)}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.description}>
+              {notice.synthetic && notice.date
+                ? `신청 마감 · ${notice.date}${notice.time ? ` ${notice.time} KST` : ''}`
+                : '확인된 일정이 없어요. 원문에서 확인해 주세요.'}
+            </Text>
+          )}
+          <Text style={s.section}>신청 방법·제출 서류</Text>
+          {analysis?.checklist.length ? (
+            analysis.checklist.map((item, index) => (
+              <Text key={index} style={s.description}>
+                • {item.text}
+              </Text>
+            ))
+          ) : (
+            <Text style={s.muted}>
+              확인된 신청 방법이나 제출 서류가 없어요. 원문에서 확인해 주세요.
+            </Text>
+          )}
+          {!notice.synthetic && analysis?.application_url && (
+            <Button
+              label="신청 페이지 열기"
+              onPress={() => {
+                void Linking.openURL(analysis.application_url!).catch(() =>
+                  setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                );
+              }}
+            />
+          )}
+          {analysis &&
+            detailReviewNotes(
+              analysis.review_notes,
+              !!selectedDetail?.raw.attachments.length,
+            ).map((note) => (
+              <Text key={note} style={s.muted}>
+                {note}
+              </Text>
+            ))}
+          {!analysis && selectedDetail?.raw.bodyText && (
+            <>
+              <Text style={s.section}>공지 본문</Text>
+              <Text selectable style={s.description}>
+                {selectedDetail.raw.bodyText}
+              </Text>
+            </>
+          )}
+          {detailErrors[notice.id] && (
             <Text style={s.reason}>
-              {eligibilityLabels[eligibility[notice.id]!.result]}
+              요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.
             </Text>
           )}
           {!notice.synthetic && selectedDetail && (
             <>
-              {selectedDetail.analysisFresh &&
-                selectedDetail.analysis?.data.events
-                  .filter((event) => event.status === 'resolved')
-                  .map((event, index) => (
-                    <Text key={index} style={s.description}>
-                      {detailEventLabel(event)}
-                    </Text>
-                  ))}
-              {!selectedDetail.analysis && (
-                <Text selectable style={s.description}>
-                  {selectedDetail.raw.bodyText}
-                </Text>
-              )}
               {selectedDetail.disposition !== 'saved' && (
                 <Button
                   label="관심 저장"
@@ -814,7 +912,6 @@ export default function CampusApp() {
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <Text style={s.brand}>GongMoa</Text>
-        <Text style={s.demo}>캠퍼스 공지 · 데모</Text>
 
         <Button label="도움말" onPress={() => setHelp(true)} />
       </View>
@@ -874,6 +971,7 @@ export default function CampusApp() {
                           notificationSnapshot,
                           refreshReminders,
                           deferredNoticeIds,
+                          pendingNoticeIds,
                           profile,
                           page === 1 ? showAll : null,
                           minute,
@@ -889,8 +987,6 @@ export default function CampusApp() {
                           page === 1 ? hasAnalysisAccess : null,
                           page === 1 ? analyzePendingNotices : null,
                           page === 1 || page === 2 ? demoNewNoticeId : null,
-                          page === 1 ? refreshDemoNotice : null,
-                          page === 1 ? demoStatus : null,
                         ]),
                   ]}
                   render={() => {
@@ -903,6 +999,7 @@ export default function CampusApp() {
                     let visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
+                        (page === 1 && pendingNoticeIds.includes(notice.id)) ||
                         ((page === 1 || page === 2) &&
                           endedNoticeIds.has(notice.id))
                       )
@@ -998,12 +1095,6 @@ export default function CampusApp() {
                                       : '갱신 상태'
                               }
                             >
-                              {refreshDemoNotice && (
-                                <Button
-                                  label="시연 공지 새로고침"
-                                  onPress={() => void refreshDemoNotice()}
-                                />
-                              )}
                               {syncStatus.phase === 'collecting' && (
                                 <Text
                                   accessibilityLiveRegion="polite"
@@ -1112,14 +1203,7 @@ export default function CampusApp() {
                                     : ''}
                                 </Text>
                               ))}
-                              {!!demoStatus && (
-                                <Text
-                                  accessibilityLiveRegion="polite"
-                                  style={s.reason}
-                                >
-                                  {demoStatus}
-                                </Text>
-                              )}
+
                               {!!syncStatus.message && (
                                 <Text style={s.reason}>
                                   {syncStatus.message}
@@ -1143,6 +1227,7 @@ export default function CampusApp() {
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                remainingCount={visible.length - 1}
                                 isNew={nextNotice.id === demoNewNoticeId}
                                 eligibilityLabel={
                                   eligibilityLabels[
@@ -1183,16 +1268,6 @@ export default function CampusApp() {
                             contentContainerStyle={s.content}
                             keyboardShouldPersistTaps="handled"
                           >
-                            <Text style={s.eyebrow}>
-                              {
-                                [
-                                  'A / TRASH',
-                                  'B / DISCOVER',
-                                  'C / HOME',
-                                  'D / SETTINGS',
-                                ][page]
-                              }
-                            </Text>
                             <Text accessibilityRole="header" style={s.title}>
                               {
                                 [
@@ -1215,7 +1290,7 @@ export default function CampusApp() {
                             </Text>
                             {demoPreview && (
                               <View style={s.card}>
-                                <Text style={s.tag}>새 맞춤 공지 · 시연</Text>
+                                <Text style={s.tag}>새 맞춤 공지</Text>
                                 <Text
                                   accessibilityRole="header"
                                   style={s.section}
@@ -1766,9 +1841,6 @@ export default function CampusApp() {
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
-            <Text style={[s.navLetter, page === i && s.light]}>
-              {['A', 'B', 'C', 'D'][i]}
-            </Text>
             <Text style={[s.buttonText, page === i && s.light]}>{name}</Text>
           </Pressable>
         ))}
@@ -1786,7 +1858,7 @@ export default function CampusApp() {
             <Text style={s.section}>사용 방법 안내</Text>
             <Text style={s.description}>
               {
-                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
+                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요. 메인에서 카드를 왼쪽으로 밀면 휴지통으로 이동해요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
               }
             </Text>
 
@@ -1842,13 +1914,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   brand: { fontSize: 30, fontWeight: '900', color: '#213e32' },
-  demo: {
-    backgroundColor: '#e0efaa',
-    borderRadius: 20,
-    padding: 7,
-    fontSize: 10,
-    color: green,
-  },
   content: {
     padding: 28,
     gap: 16,
@@ -1857,7 +1922,6 @@ const s = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: 40,
   },
-  eyebrow: { color: green, fontSize: 10, letterSpacing: 2, fontWeight: '800' },
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
@@ -1963,8 +2027,13 @@ const s = StyleSheet.create({
     padding: 12,
     gap: 5,
   },
-  navItem: { flex: 1, alignItems: 'center', padding: 8, gap: 3 },
-  navLetter: { color: green, fontSize: 16, fontWeight: '800' },
+  navItem: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
   toast: {
     backgroundColor: '#213e32',
     padding: 14,

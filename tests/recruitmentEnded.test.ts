@@ -6,6 +6,7 @@ import {
 } from '../fixtures/synthetic/notices';
 import {
   attendanceFollowUpEnded,
+  eventNoticeEnded,
   gatheringEnded,
   recruitmentEnded,
 } from '../src/domain/dates';
@@ -127,6 +128,59 @@ test('출석인정 후속글은 AI가 행사 유형을 확정하지 않아도 �
       now,
       body + '\n- 일시: 2026년 11월 30일',
     ),
+    false,
+  );
+});
+
+test('원문과 연도·요일이 맞는 지난 강연 후보만 숨기고 미래 일정은 유지한다', () => {
+  const title = '[인권센터] 2026학년도 인권아카데미 개최';
+  const body = '1. 일시: 11월 10일(화) 18:30~20:30';
+  const event = {
+    type: 'event_start',
+    status: 'needs_review',
+    label: '강연 일시',
+    evidence: body,
+    date: '2026-11-10',
+    time: null,
+    timezone: null,
+    precision: 'date',
+  } as const;
+  const now = new Date('2026-11-14T00:00:00Z');
+  assert.equal(eventNoticeEnded(title, body, [event], now), true);
+  assert.equal(eventNoticeEnded(title, body, [], now), true);
+  assert.equal(
+    eventNoticeEnded(
+      title,
+      body,
+      [{ ...event, date: null, evidence: 'AI 요약' }],
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    eventNoticeEnded(title, body.replace('(화)', '(금)'), [], now),
+    false,
+  );
+  assert.equal(
+    eventNoticeEnded(title, body + '\n2. 일시: 11월 17일(화) 18:30', [], now),
+    false,
+  );
+  assert.equal(
+    eventNoticeEnded(title, body + ' 이후 매주 화요일', [], now),
+    false,
+  );
+  assert.equal(eventNoticeEnded(title, '', [event], now), false);
+  assert.equal(
+    eventNoticeEnded(
+      title,
+      body,
+      [event, { ...event, type: 'document_deadline', date: '2026-11-20' }],
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    eventNoticeEnded(title.replace('2026학년도 ', ''), body, [event], now),
     false,
   );
 });

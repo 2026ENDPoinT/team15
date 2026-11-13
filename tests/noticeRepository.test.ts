@@ -399,3 +399,36 @@ test('version four migration imports existing fresh analysis tags', async () => 
     db.close();
   }
 });
+
+test('메인에서 버린 저장 공지는 휴지통으로 이동하고 알림을 다시 동기화한다', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    const repository = await openRepository(db);
+    let reconciliations = 0;
+    const actions = createNoticeActions(repository, async () => {
+      reconciliations++;
+    });
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    await repository.saveNotice(notice.id);
+    await repository.setProgress(notice.id, 'preparing');
+    const checklist = await repository.getChecklist(notice.id);
+    await actions.dismissNotice(notice.id);
+    assert.equal(
+      (await repository.getNoticeDetail(notice.id))?.disposition,
+      'dismissed',
+    );
+    assert.deepEqual(await repository.listSavedNotices(), []);
+    assert.equal(reconciliations, 1);
+    await repository.restoreNotice(notice.id);
+    await repository.saveNotice(notice.id);
+    assert.equal(
+      (await repository.getNoticeDetail(notice.id))?.progress,
+      'preparing',
+    );
+    assert.deepEqual(await repository.getChecklist(notice.id), checklist);
+  } finally {
+    db.close();
+  }
+});
