@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CampusButton } from './CampusButton';
 import { campusStyles as s } from './campusStyles';
 
@@ -34,11 +34,14 @@ export function ChecklistEditor({
               accessibilityState={{ checked: item.completed, disabled }}
               disabled={disabled}
               aria-checked={item.completed}
-              style={[s.button, { flex: 1 }, item.completed && s.checkedItem]}
+              style={[styles.item, disabled && styles.disabled]}
               onPress={() => void onToggle(item)}
             >
-              <Text style={s.buttonText}>
-                {`${item.completed ? '☑' : '☐'} ${item.text}`}
+              <View style={[styles.box, item.completed && styles.checkedBox]}>
+                {item.completed && <Text style={styles.check}>✓</Text>}
+              </View>
+              <Text style={[styles.label, item.completed && styles.completed]}>
+                {item.text}
               </Text>
             </Pressable>
             <CampusButton
@@ -73,3 +76,28 @@ export function ChecklistEditor({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  item: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 44,
+    paddingVertical: 8,
+  },
+  box: {
+    width: 18,
+    height: 18,
+    borderWidth: 1,
+    borderColor: '#728174',
+    borderRadius: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkedBox: { backgroundColor: '#28634d', borderColor: '#28634d' },
+  check: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '700' },
+  label: { flex: 1, color: '#213e32', fontSize: 14, lineHeight: 22 },
+  completed: { color: '#728174', textDecorationLine: 'line-through' },
+  disabled: { opacity: 0.5 },
+});
