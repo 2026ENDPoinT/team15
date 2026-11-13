@@ -117,7 +117,14 @@ export default function CampusApp() {
   const [page, setPage] = useState(2);
   const pageRef = useRef(page);
   pageRef.current = page;
-  const { buckets, actions, details, checklists } = useDemoNotice();
+  const {
+    buckets,
+    actions,
+    details,
+    checklists,
+    testNotification,
+    reservationStatus,
+  } = useDemoNotice();
   const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
   const [keys, setKeys] = useState(['대회', '장학금']);
@@ -139,6 +146,7 @@ export default function CampusApp() {
   const [detail, setDetail] = useState<Notice | null>(null);
   const [help, setHelp] = useState(false);
   const [message, setMessage] = useState('');
+  const [testingNotification, setTestingNotification] = useState(false);
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const navigate = (next: number) => {
     if (next < 0 || next > 3 || next === pageRef.current) return;
@@ -478,6 +486,70 @@ export default function CampusApp() {
                   setMessage('설정을 저장했어요. 맞춤 공지에 반영했습니다.');
                 }}
               />
+              {testNotification && (
+                <Button
+                  label={
+                    testingNotification
+                      ? '알림 예약 중…'
+                      : '10초 뒤 테스트 알림'
+                  }
+                  onPress={async () => {
+                    if (testingNotification) return;
+                    setTestingNotification(true);
+                    try {
+                      const scheduled = await testNotification();
+                      setMessage(
+                        scheduled
+                          ? '테스트 알림을 예약했어요.'
+                          : '기기 설정에서 알림을 허용해 주세요.',
+                      );
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error
+                          ? error.message
+                          : '테스트 알림을 예약하지 못했어요.',
+                      );
+                    } finally {
+                      setTestingNotification(false);
+                    }
+                  }}
+                />
+              )}
+              {reservationStatus && (
+                <View style={s.card}>
+                  <Text style={s.section}>가상 공지 마감 알림 검증</Text>
+                  <Text style={s.muted}>
+                    해커톤 공지를 선택하고 신청 상태를 준비 중으로 바꾼 뒤
+                    예약하세요. 테스트 알림은 5분 뒤에 예정돼요.
+                  </Text>
+                  {([true, false] as const).map((enable) => (
+                    <Button
+                      key={String(enable)}
+                      label={
+                        enable
+                          ? '가상 마감 알림 예약'
+                          : '가상 마감 예약 수 확인'
+                      }
+                      onPress={async () => {
+                        if (testingNotification) return;
+                        setTestingNotification(true);
+                        try {
+                          const count = await reservationStatus(enable);
+                          setMessage(`기기에 남은 가상 마감 예약 · ${count}건`);
+                        } catch (error) {
+                          setMessage(
+                            error instanceof Error
+                              ? error.message
+                              : '예약을 확인하지 못했어요.',
+                          );
+                        } finally {
+                          setTestingNotification(false);
+                        }
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
             </>
           )}
           <Text style={s.muted}>

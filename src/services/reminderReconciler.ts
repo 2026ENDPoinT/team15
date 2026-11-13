@@ -26,6 +26,13 @@ export function createReminderReconciler(
   >,
   platform: ReminderPlatform,
   clock = () => new Date(),
+  shouldSchedule = (_noticeId: string) => true,
+  getFireAt = (
+    notice: Awaited<
+      ReturnType<NoticeRepository['getHomeModel']>
+    >['notices'][number],
+    now: Date,
+  ) => reminderFireAt(notice.events, now),
 ) {
   let pending = Promise.resolve();
 
@@ -35,8 +42,13 @@ export function createReminderReconciler(
     const allowed = await platform.isAllowed();
     const desired = new Map<string, ReminderRequest>();
     for (const notice of notices) {
-      if (!allowed || notice.progress === 'applied') continue;
-      const fireAt = reminderFireAt(notice.events, now);
+      if (
+        !allowed ||
+        notice.progress === 'applied' ||
+        !shouldSchedule(notice.id)
+      )
+        continue;
+      const fireAt = getFireAt(notice, now);
       const key = `${notice.id}:application_close:v1`;
       if (fireAt) desired.set(key, { key, noticeId: notice.id, fireAt });
     }
