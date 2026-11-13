@@ -1,16 +1,8 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentRef,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   PanResponder,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -33,7 +25,6 @@ export default function DiscoverCard({
 }) {
   const { width, height } = useWindowDimensions();
   const position = useRef(new Animated.ValueXY({ x: 0, y: 60 })).current;
-  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -138,41 +129,25 @@ export default function DiscoverCard({
       style={[styles.card, { transform: position.getTranslateTransform() }]}
       {...responder.panHandlers}
     >
-      <ScrollView
-        ref={scroll}
-        testID="discover-card-body"
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        scrollEnabled={expanded}
-        keyboardShouldPersistTaps="handled"
-      >
+      <View testID="discover-card-body" style={styles.bodyContent}>
         <Text style={styles.muted}>{notice.org}</Text>
-        <Text
-          accessibilityRole="header"
-          style={styles.title}
-          numberOfLines={expanded ? undefined : 3}
-        >
+        <Text accessibilityRole="header" style={styles.title}>
           {notice.title}
         </Text>
-        <Text style={styles.tags} numberOfLines={expanded ? undefined : 1}>
-          {notice.tags.join(' · ')}
-        </Text>
-        <Text style={styles.summary} numberOfLines={expanded ? undefined : 3}>
-          {notice.summary}
-        </Text>
+        <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
+        <Text style={styles.summary}>{notice.summary}</Text>
         <Text style={styles.muted}>
           {notice.date
             ? `${notice.date} · ${notice.time} KST 마감`
             : '정확한 일정은 원문에서 확인'}
         </Text>
         {expanded && detailContent}
-      </ScrollView>
+      </View>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         aria-expanded={expanded}
         onPress={() => {
-          scroll.current?.scrollTo({ y: 0, animated: false });
           setExpanded((old) => !old);
         }}
         style={styles.detailToggle}
@@ -209,15 +184,13 @@ export default function DiscoverCard({
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
-    minHeight: 0,
+    flexShrink: 0,
     borderWidth: 1,
     borderColor: '#dfe5d9',
     borderRadius: 20,
     backgroundColor: 'white',
     overflow: 'hidden',
   },
-  body: { flex: 1, minHeight: 0 },
   bodyContent: { padding: 18, gap: 14 },
   title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#213e32' },
   muted: { fontSize: 12, lineHeight: 19, color: '#728174' },

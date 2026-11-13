@@ -606,13 +606,20 @@ export default function CampusApp() {
                 }
               >
                 {page === 1 ? (
-                  <View
+                  <ScrollView
                     testID={
                       page === pageRef.current
                         ? 'active-page'
                         : 'inactive-page-1'
                     }
-                    style={s.discoverPage}
+                    scrollEnabled={
+                      !cardDragging && !draggingPage && !pageTransitioning
+                    }
+                    ref={(scroll) => {
+                      scrolls.current[page] = scroll;
+                    }}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={s.discoverPage}
                   >
                     <View style={s.between}>
                       <Text accessibilityRole="header" style={s.section}>
@@ -700,7 +707,7 @@ export default function CampusApp() {
                         />
                       </View>
                     )}
-                  </View>
+                  </ScrollView>
                 ) : (
                   <ScrollView
                     testID={
@@ -780,74 +787,96 @@ export default function CampusApp() {
                             }}
                           />
                         </View>
-                        <View style={s.grid}>
-                          {['일', '월', '화', '수', '목', '금', '토'].map(
-                            (d, weekday) => (
-                              <View key={d} style={s.cell}>
-                                <Text
-                                  style={[
-                                    s.muted,
-                                    weekday === 0 && s.sunday,
-                                    weekday === 6 && s.saturday,
-                                  ]}
-                                >
-                                  {d}
-                                </Text>
-                              </View>
-                            ),
-                          )}
-                          {Array.from({ length: month.getDay() }, (_, i) => (
-                            <View key={`blank${i}`} style={s.cell} />
-                          ))}
-                          {Array.from(
-                            {
-                              length: new Date(
-                                month.getFullYear(),
-                                month.getMonth() + 1,
-                                0,
-                              ).getDate(),
-                            },
-                            (_, i) => {
-                              const date =
-                                prefix + String(i + 1).padStart(2, '0');
-                              const weekday = (month.getDay() + i) % 7;
-                              const hasEvent = home.schedule.some(
-                                (event) => event.date === date,
-                              );
-                              return (
-                                <Pressable
-                                  key={date}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={`${date}, 일정 ${hasEvent ? 1 : 0}개`}
-                                  accessibilityState={{
-                                    selected: picked === date,
-                                  }}
-                                  onPress={() =>
-                                    setPicked(picked === date ? null : date)
-                                  }
-                                  style={[
-                                    s.cell,
-                                    picked === date && s.primary,
-                                    date === today && s.today,
-                                  ]}
-                                >
+                        <View>
+                          <View style={s.calendarRow}>
+                            {['일', '월', '화', '수', '목', '금', '토'].map(
+                              (d, weekday) => (
+                                <View key={d} style={s.cell}>
                                   <Text
                                     style={[
-                                      picked === date ? s.light : s.buttonText,
+                                      s.muted,
                                       weekday === 0 && s.sunday,
                                       weekday === 6 && s.saturday,
                                     ]}
                                   >
-                                    {i + 1}
+                                    {d}
                                   </Text>
-                                  <Text
-                                    style={[s.dot, picked === date && s.light]}
-                                  >
-                                    {hasEvent ? '•' : ' '}
-                                  </Text>
-                                </Pressable>
-                              );
+                                </View>
+                              ),
+                            )}
+                          </View>
+                          {Array.from(
+                            {
+                              length: Math.ceil(
+                                (month.getDay() +
+                                  new Date(
+                                    month.getFullYear(),
+                                    month.getMonth() + 1,
+                                    0,
+                                  ).getDate()) /
+                                  7,
+                              ),
                             },
+                            (_, week) => (
+                              <View key={week} style={s.calendarRow}>
+                                {Array.from({ length: 7 }, (_, weekday) => {
+                                  const i = week * 7 + weekday - month.getDay();
+                                  const days = new Date(
+                                    month.getFullYear(),
+                                    month.getMonth() + 1,
+                                    0,
+                                  ).getDate();
+                                  if (i < 0 || i >= days)
+                                    return (
+                                      <View key={weekday} style={s.cell} />
+                                    );
+                                  const date =
+                                    prefix + String(i + 1).padStart(2, '0');
+
+                                  const hasEvent = home.schedule.some(
+                                    (event) => event.date === date,
+                                  );
+                                  return (
+                                    <Pressable
+                                      key={date}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`${date}, 일정 ${hasEvent ? 1 : 0}개`}
+                                      accessibilityState={{
+                                        selected: picked === date,
+                                      }}
+                                      onPress={() =>
+                                        setPicked(picked === date ? null : date)
+                                      }
+                                      style={[
+                                        s.cell,
+                                        picked === date && s.primary,
+                                        date === today && s.today,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          picked === date
+                                            ? s.light
+                                            : s.buttonText,
+                                          weekday === 0 && s.sunday,
+                                          weekday === 6 && s.saturday,
+                                        ]}
+                                      >
+                                        {i + 1}
+                                      </Text>
+                                      <Text
+                                        style={[
+                                          s.dot,
+                                          picked === date && s.light,
+                                        ]}
+                                      >
+                                        {hasEvent ? '•' : ' '}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            ),
                           )}
                         </View>
                         <Text style={s.reason}>
@@ -1244,14 +1273,11 @@ const s = StyleSheet.create({
     gap: 14,
   },
   discoverPage: {
-    flex: 1,
-    minHeight: 0,
     width: '100%',
     maxWidth: 600,
     alignSelf: 'center',
     padding: 20,
     gap: 12,
-    overflow: 'hidden',
   },
 
   pageViewport: { flex: 1, overflow: 'hidden' },
@@ -1349,7 +1375,7 @@ const s = StyleSheet.create({
   buttonText: { color: green, fontSize: 12 },
   light: { color: 'white', fontSize: 12, lineHeight: 20 },
   link: { color: green, fontSize: 12, paddingVertical: 8 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarRow: { flexDirection: 'row', flexWrap: 'nowrap' },
   today: { borderWidth: 2, borderColor: '#83a26c', borderRadius: 12 },
   saturday: { color: '#2563eb' },
   sunday: { color: '#dc2626' },
@@ -1362,7 +1388,8 @@ const s = StyleSheet.create({
     shadowRadius: 12,
   },
   cell: {
-    width: '14.285714%',
+    flex: 1,
+    minWidth: 0,
     minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
