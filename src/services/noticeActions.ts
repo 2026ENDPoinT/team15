@@ -10,6 +10,8 @@ export function createNoticeActions(
   | 'dismissNotice'
   | 'unsaveNotice'
   | 'setProgress'
+  | 'addChecklistItem'
+  | 'deleteChecklistItem'
   | 'setChecklistCompleted'
   | 'acknowledgeDeadlineChange'
   | 'reconcileReminders'
@@ -32,6 +34,12 @@ export function createNoticeActions(
     },
     setProgress(noticeId, progress) {
       return syncAfter(repository.setProgress(noticeId, progress));
+    },
+    addChecklistItem(noticeId, text) {
+      return repository.addChecklistItem(noticeId, text);
+    },
+    deleteChecklistItem(itemId) {
+      return repository.deleteChecklistItem(itemId);
     },
     setChecklistCompleted(itemId, completed) {
       return repository.setChecklistCompleted(itemId, completed);

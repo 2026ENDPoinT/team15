@@ -1,3 +1,4 @@
+import { ChecklistEditor } from './ChecklistEditor';
 import { CampusButton } from './CampusButton';
 import { campusStyles as s } from './campusStyles';
 import { NoticeCalendar } from './NoticeCalendar';
@@ -815,33 +816,24 @@ export default function CampusApp() {
               )}
               <Text style={s.section}>신청·제출 체크리스트</Text>
 
-              {selectedChecklist?.items.length ? (
-                selectedChecklist.items.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={item.text}
-                    accessibilityState={{
-                      checked: item.completed,
-                      disabled: detailUpdating,
-                    }}
-                    disabled={detailUpdating}
-                    aria-checked={item.completed}
-                    style={[s.button, item.completed && s.checkedItem]}
-                    onPress={() =>
-                      void updateDetail(notice.id, () =>
-                        actions.setChecklistCompleted(item.id, !item.completed),
-                      )
-                    }
-                  >
-                    <Text
-                      style={s.buttonText}
-                    >{`${item.completed ? '☑' : '☐'} ${item.text}`}</Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={s.muted}>확인된 신청·제출 항목이 없어요.</Text>
-              )}
+              <ChecklistEditor
+                items={selectedChecklist?.items ?? []}
+                disabled={detailUpdating}
+                onToggle={(item) =>
+                  updateDetail(notice.id, () =>
+                    actions.setChecklistCompleted(item.id, !item.completed),
+                  )
+                }
+                onDelete={(id) =>
+                  updateDetail(notice.id, () => actions.deleteChecklistItem(id))
+                }
+                onAdd={(text, onSaved) =>
+                  updateDetail(notice.id, async () => {
+                    await actions.addChecklistItem(notice.id, text);
+                    onSaved();
+                  })
+                }
+              />
             </>
           )}
         </View>

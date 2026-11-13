@@ -499,3 +499,51 @@ test('기존 가상 공지만 제거하고 실제 공지·체크를 보존하며
     db.close();
   }
 });
+
+test('사용자 체크리스트 추가·삭제는 재분석과 DB 재연결 후에도 유지된다', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'checklist-edit-'));
+  const path = join(directory, 'notices.sqlite');
+  let db = new DatabaseSync(path);
+  try {
+    let repository = await openRepository(db);
+    const actions = createNoticeActions(repository);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    await actions.saveNotice(notice.id);
+    const original = (await repository.getChecklist(notice.id)).items;
+    await actions.addChecklistItem(notice.id, '   ');
+    assert.deepEqual(
+      (await repository.getChecklist(notice.id)).items,
+      original,
+    );
+    await actions.addChecklistItem(notice.id, '  제출 확인하기  ');
+    const added = (await repository.getChecklist(notice.id)).items.at(-1)!;
+    assert.equal(added.text, '제출 확인하기');
+    assert.equal(added.completed, false);
+    await actions.setChecklistCompleted(added.id, true);
+    await actions.deleteChecklistItem(original[0]!.id);
+    await repository.upsertRawNotice(changedNoticeFixture.notice);
+    await repository.applyAnalysis(changedNoticeFixture.analysis);
+    db.close();
+    db = new DatabaseSync(path);
+    repository = await openRepository(db);
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, [
+      ...original.slice(1),
+      { ...added, completed: true },
+    ]);
+    for (const item of (await repository.getChecklist(notice.id)).items) {
+      await repository.deleteChecklistItem(item.id);
+    }
+    await repository.applyAnalysis(changedNoticeFixture.analysis);
+    await repository.saveNotice(notice.id);
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, []);
+    await repository.dismissNotice(notice.id);
+    await repository.addChecklistItem(notice.id, '저장하지 않은 공지');
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, []);
+  } finally {
+    db.close();
+    unlinkSync(path);
+    rmdirSync(directory);
+  }
+});

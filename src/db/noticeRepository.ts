@@ -75,6 +75,8 @@ export interface NoticeRepository {
   deleteNotice(noticeId: string): Promise<void>;
   unsaveNotice(noticeId: string): Promise<void>;
   setProgress(noticeId: string, progress: Progress): Promise<void>;
+  addChecklistItem(noticeId: string, text: string): Promise<void>;
+  deleteChecklistItem(itemId: string): Promise<void>;
   setChecklistCompleted(itemId: string, completed: boolean): Promise<void>;
   getChecklist(noticeId: string): Promise<{
     items: ChecklistItem[];
@@ -680,6 +682,31 @@ export async function createNoticeRepository(
            SET progress = ?, updated_at = ?
            WHERE notice_id = ? AND disposition = 'saved' AND progress <> ?`,
           [progress, new Date().toISOString(), noticeId, progress],
+        );
+      });
+    },
+
+    addChecklistItem(noticeId, text) {
+      return enqueue(async () => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        await db.runAsync(
+          `INSERT INTO checklist_items (id, notice_id, text, evidence, created_at)
+           SELECT ?, notice_id, ?, '', ? FROM user_notices
+           WHERE notice_id = ? AND disposition = 'saved'`,
+          [crypto.randomUUID(), trimmed, new Date().toISOString(), noticeId],
+        );
+      });
+    },
+
+    deleteChecklistItem(itemId) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `DELETE FROM checklist_items WHERE id = ? AND EXISTS (
+             SELECT 1 FROM user_notices u
+             WHERE u.notice_id = checklist_items.notice_id AND u.disposition = 'saved'
+           )`,
+          [itemId],
         );
       });
     },
