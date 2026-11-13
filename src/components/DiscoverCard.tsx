@@ -115,7 +115,7 @@ export default function DiscoverCard({
           <Text style={styles.muted}>
             {notice.date
               ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
-              : '정확한 일정은 원문에서 확인'}
+              : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
           </Text>
           {expanded && detailContent}
         </View>

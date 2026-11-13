@@ -53,6 +53,7 @@ import DiscoverCard from './DiscoverCard';
 import { AnalysisSettings } from './AnalysisSettings';
 import {
   detailReviewNotes,
+  detailEventLabel,
   deadlineReminderLabel,
 } from '../features/demo/noticeDetailPresentation';
 
@@ -168,7 +169,9 @@ function SwipeCard({
           <Text style={s.tag}>
             {notice.date
               ? `${notice.date.slice(5).replace('-', '.')} 마감`
-              : '일정 미정'}
+              : notice.scheduleText
+                ? '추출 일정 있음'
+                : '일정 미정'}
           </Text>
         </View>
         <Text style={s.cardTitle}>{notice.title}</Text>
@@ -188,7 +191,7 @@ function SwipeCard({
         <Text style={s.muted}>
           {notice.date
             ? `${notice.date}${notice.time ? ` · ${notice.time} KST` : ''}`
-            : '정확한 일정은 원문에서 확인'}
+            : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
         </Text>
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
@@ -244,6 +247,9 @@ export default function CampusApp() {
     home,
     syncState,
     syncStatus,
+    analysisProgress,
+    hasAnalysisAccess,
+    analyzePendingNotices,
     reminderWarning,
     refreshNotices,
     demoNewNoticeId,
@@ -601,10 +607,7 @@ export default function CampusApp() {
               {selectedDetail.analysisFresh &&
                 selectedDetail.analysis?.data.events.map((event, index) => (
                   <Text key={index} style={s.description}>
-                    {event.label} ·{' '}
-                    {event.status === 'resolved'
-                      ? `${event.date}${event.time ? ` ${event.time}` : ''}`
-                      : '날짜 확인 필요'}
+                    {detailEventLabel(event)}
                   </Text>
                 ))}
               {!selectedDetail.analysis && (
@@ -790,6 +793,9 @@ export default function CampusApp() {
                           page === 1 ? syncState : null,
                           page === 1 ? syncStatus : null,
                           page === 1 ? refreshNotices : null,
+                          analysisProgress,
+                          page === 1 ? hasAnalysisAccess : null,
+                          page === 1 ? analyzePendingNotices : null,
                           page === 1 || page === 2 ? demoNewNoticeId : null,
                           page === 1 ? refreshDemoNotice : null,
                           page === 1 ? demoStatus : null,
@@ -901,6 +907,7 @@ export default function CampusApp() {
                                   ? '실제 공지 새로고침'
                                   : '공지 갱신 중…'
                               }
+                              disabled={syncStatus.phase !== 'idle'}
                               onPress={() => {
                                 if (syncStatus.phase === 'idle')
                                   void refreshNotices();
@@ -921,11 +928,71 @@ export default function CampusApp() {
                               style={s.muted}
                             >
                               {syncStatus.phase === 'collecting'
-                                ? '원문 수집 중 · 수집된 공지는 바로 확인할 수 있어요.'
+                                ? '원문 수집 중 · 분석이 완료되면 공지를 표시해요.'
                                 : syncStatus.phase === 'analyzing'
-                                  ? 'AI 분석 중 · 공지를 먼저 저장할 수 있어요.'
+                                  ? 'AI 분석 중 · 완료된 공지부터 표시해요.'
                                   : '공지 갱신 대기 중'}
                             </Text>
+                            {analysisProgress.total > 0 && (
+                              <View testID="analysis-progress" style={s.card}>
+                                <Text
+                                  accessibilityLiveRegion="polite"
+                                  style={s.section}
+                                >
+                                  분석 완료 {analysisProgress.completed} /{' '}
+                                  {analysisProgress.total}건
+                                </Text>
+                                <View
+                                  accessibilityRole="progressbar"
+                                  accessibilityLabel="공지 분석 진행률"
+                                  accessibilityValue={{
+                                    min: 0,
+                                    max: analysisProgress.total,
+                                    now: analysisProgress.completed,
+                                  }}
+                                  style={{
+                                    height: 6,
+                                    backgroundColor: '#e4e9df',
+                                    borderRadius: 3,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <View
+                                    style={{
+                                      height: 6,
+                                      width: `${(analysisProgress.completed / analysisProgress.total) * 100}%`,
+                                      backgroundColor: '#28634d',
+                                    }}
+                                  />
+                                </View>
+                                <Text style={s.muted}>
+                                  분석 중 {analysisProgress.running}건 · 대기{' '}
+                                  {analysisProgress.waiting}건 · 실패{' '}
+                                  {analysisProgress.failed}건 · 분석 불가{' '}
+                                  {analysisProgress.unsupported}건
+                                </Text>
+                                <Text style={s.muted}>
+                                  최신 분석이 끝난 실제 공지만 카드에 표시해요.
+                                </Text>
+                                {analysisProgress.waiting +
+                                  analysisProgress.failed >
+                                  0 &&
+                                  (hasAnalysisAccess ? (
+                                    <Button
+                                      label="남은 공지 분석"
+                                      disabled={syncStatus.phase !== 'idle'}
+                                      onPress={() =>
+                                        void analyzePendingNotices()
+                                      }
+                                    />
+                                  ) : (
+                                    <Button
+                                      label="AI 분석 설정하기"
+                                      onPress={() => navigate(3)}
+                                    />
+                                  ))}
+                              </View>
+                            )}
                             {syncState.sources.map((source) => (
                               <Text key={source.sourceId} style={s.muted}>
                                 {source.sourceId === 'seoultech_cs'
@@ -1000,7 +1067,12 @@ export default function CampusApp() {
                                 <Text style={s.description}>
                                   {held.length
                                     ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                                    : '선호 키워드에 맞는 새 공지가 없어요.'}
+                                    : analysisProgress.completed <
+                                        analysisProgress.total
+                                      ? '표시할 분석 완료 공지가 없어요. 위에서 분석 진행 상황을 확인해 주세요.'
+                                      : showAll
+                                        ? '새 공지가 없어요.'
+                                        : '선호 키워드에 맞는 새 공지가 없어요.'}
                                 </Text>
                                 <Button
                                   label="키워드 수정하기 →"
@@ -1269,7 +1341,10 @@ export default function CampusApp() {
                                           ? '휴지통이 비어 있어요.'
                                           : page === 1
                                             ? '선호 키워드에 맞는 새 공지가 없어요.'
-                                            : '아직 선택한 공지가 없어요.'}
+                                            : analysisProgress.completed <
+                                                analysisProgress.total
+                                              ? '분석 중이거나 확인이 필요한 공지는 숨겨 두었어요. 맞춤 공지에서 분석 진행 상황을 확인해 주세요.'
+                                              : '아직 선택한 공지가 없어요.'}
                                     </Text>
                                     {page !== 0 && (
                                       <Button

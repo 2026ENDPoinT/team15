@@ -22,7 +22,8 @@ const messages: Record<ErrorCode, string> = {
   RATE_LIMITED: '분석 요청이 많아요. 표시된 시각 이후 다시 시도해 주세요.',
   INPUT_TOO_LARGE: '분석 가능한 본문 크기를 넘었어요. 원문을 확인해 주세요.',
   INVALID_INPUT: '이 공지는 자동 분석할 수 없어요. 원문을 확인해 주세요.',
-  CONTRACT_MISMATCH: '분석 버전이 맞지 않아요. 앱 설정을 확인해 주세요.',
+  CONTRACT_MISMATCH:
+    '앱과 분석 서버의 버전이 달라요. 앱·서버 업데이트 후 앱을 다시 실행해 주세요.',
   INVALID_MODEL_OUTPUT: '분석 결과를 확인하지 못했어요. 원문을 확인해 주세요.',
   PROVIDER_UNAVAILABLE:
     'AI 분석 서버를 사용할 수 없어요. 나중에 다시 시도해 주세요.',

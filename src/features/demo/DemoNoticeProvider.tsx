@@ -33,7 +33,11 @@ import { toAnalyzeNoticeRequest } from '../../../shared/mappers';
 import { analysisAccess } from '../../platform/analysisAccess';
 import { createAnalysisClient } from '../../services/analysisClient';
 import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
-import { toNoticeCard } from './noticeReadModel';
+import {
+  getAnalysisProgress,
+  isNoticeCardReady,
+  toNoticeCard,
+} from './noticeReadModel';
 import { matchesCollege } from '../../domain/collegeFilter';
 import {
   defaultCampusProfile,
@@ -232,9 +236,12 @@ async function readState(repository: Repository) {
     profile: (await repository.getProfile()) ?? defaultCampusProfile,
     reminders,
     notificationSnapshot,
+    analysisProgress: getAnalysisProgress(records),
     notices: entries
       .flatMap(({ record, detail }) =>
-        detail ? [toNoticeCard(record, detail)] : [],
+        detail && isNoticeCardReady(record)
+          ? [toNoticeCard(record, detail)]
+          : [],
       )
       .sort(
         (a, b) =>
@@ -263,6 +270,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   saveAnalysisToken(token: string): Promise<void>;
   clearAnalysisToken(): Promise<void>;
   refreshNotices(): Promise<void>;
+  analyzePendingNotices(): Promise<void>;
   demoNewNoticeId: string | null;
   demoStatus: string | null;
   refreshDemoNotice: (() => Promise<void>) | null;
@@ -436,6 +444,9 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
         demoStatus,
         refreshNotices: async () => {
           await (await getRepository()).sync.refreshNotices('manual');
+        },
+        analyzePendingNotices: async () => {
+          await (await getRepository()).sync.analyzePendingNotices();
         },
         refreshDemoNotice: demoEnabled
           ? async () => {

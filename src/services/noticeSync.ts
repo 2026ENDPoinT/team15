@@ -51,6 +51,7 @@ export function createNoticeSync(options: {
     for (const listener of listeners) listener();
   }
   let refresh: Promise<void> | null = null;
+  let continuation: Promise<void> | null = null;
   let analysisQueue = Promise.resolve();
   const detailRequests = new Map<string, Promise<void>>();
   let authBlocked = false;
@@ -191,8 +192,7 @@ export function createNoticeSync(options: {
             isLiveNotice(record.notice) &&
             !record.analysisFresh &&
             record.analysisStatus !== 'unsupported' &&
-            !attempted.has(record.notice.id) &&
-            priority(record) < 3,
+            !attempted.has(record.notice.id),
         )
         .sort(
           (a, b) =>
@@ -323,6 +323,7 @@ export function createNoticeSync(options: {
       reason: Parameters<NoticeActions['refreshNotices']>[0],
     ): Promise<void> {
       if (refresh) return refresh;
+      if (continuation) return continuation;
       refresh = runRefresh(reason)
         .catch(() => {
           publish({
@@ -336,6 +337,28 @@ export function createNoticeSync(options: {
         });
       return refresh;
     },
+    analyzePendingNotices(): Promise<void> {
+      if (refresh) return refresh;
+      if (continuation) return continuation;
+      if (
+        authBlocked ||
+        (status.analysisRetryAt &&
+          Date.parse(status.analysisRetryAt) > now().getTime())
+      )
+        return Promise.resolve();
+      publish({ phase: 'analyzing', message: null });
+      continuation = enqueueAnalysis(analyzeBatch)
+        .catch(() => {
+          publish({
+            message: '분석을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.',
+          });
+        })
+        .finally(() => {
+          continuation = null;
+          publish({ phase: detailRequests.size ? 'analyzing' : 'idle' });
+        });
+      return continuation;
+    },
     analyzeNotice(noticeId: string): Promise<void> {
       const running = detailRequests.get(noticeId);
       if (running) return running;
@@ -346,7 +369,14 @@ export function createNoticeSync(options: {
         if (record) await analyzeOne(record);
       }).finally(() => {
         detailRequests.delete(noticeId);
-        publish({ phase: refresh ? 'collecting' : 'idle' });
+        publish({
+          phase:
+            continuation || detailRequests.size
+              ? 'analyzing'
+              : refresh
+                ? 'collecting'
+                : 'idle',
+        });
       });
       detailRequests.set(noticeId, result);
       return result;

@@ -83,7 +83,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: '준비 중으로 변경' }).click();
+  await detailCard.getByRole('button', { name: '준비 중으로 변경' }).click();
   await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
   await page.reload();
   await expect(scholarship).toBeVisible();
