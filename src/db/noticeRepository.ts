@@ -1,3 +1,8 @@
+import type {
+  CollectedNotice,
+  Progress,
+  SourceId,
+} from '../../shared/contracts';
 import { migration1 } from './migrations';
 
 type BindValue = string | number | null;
@@ -11,46 +16,33 @@ export interface NoticeDatabase {
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
-// Storage fields for C's collected notice. This interface owns no API schema.
-export interface RawNoticeWrite {
-  id: string;
-  sourceId: string;
-  boardId: string;
-  postId: string;
-  sourceUrl: string;
-  title: string;
-  publishedDate: string | null;
-  bodyText: string;
-  extractedLinks: Array<{ label: string; url: string }>;
-  attachments: Array<{ name: string; url: string | null }>;
-  hasBodyImages: boolean;
-  sourceUpdatedAt: string | null;
-  fetchedAt: string;
-  contentHash: string;
-}
-
 export interface SavedNotice {
   id: string;
   title: string;
-  sourceId: string;
+  sourceId: SourceId;
   sourceUrl: string;
   savedAt: string;
-  progress: 'saved' | 'preparing' | 'applied';
+  progress: Progress;
 }
 
 export interface NoticeRepository {
-  upsertRawNotice(notice: RawNoticeWrite): Promise<void>;
+  upsertRawNotice(notice: CollectedNotice): Promise<void>;
   saveNotice(noticeId: string): Promise<void>;
   listSavedNotices(): Promise<SavedNotice[]>;
 }
 
 // Create one repository for the app's database connection.
-export async function createNoticeRepository(db: NoticeDatabase): Promise<NoticeRepository> {
+export async function createNoticeRepository(
+  db: NoticeDatabase,
+): Promise<NoticeRepository> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   await db.withTransactionAsync(async () => {
-    const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+    const version = await db.getFirstAsync<{ user_version: number }>(
+      'PRAGMA user_version',
+    );
     if (version?.user_version === 1) return;
-    if (version?.user_version !== 0) throw new Error('Unsupported notice database version');
+    if (version?.user_version !== 0)
+      throw new Error('Unsupported notice database version');
     await db.execAsync(migration1);
     await db.execAsync('PRAGMA user_version = 1');
   });
@@ -58,7 +50,10 @@ export async function createNoticeRepository(db: NoticeDatabase): Promise<Notice
   let pending = Promise.resolve();
   function enqueue<T>(work: () => Promise<T>): Promise<T> {
     const result = pending.then(work);
-    pending = result.then(() => undefined, () => undefined);
+    pending = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 
@@ -88,10 +83,18 @@ export async function createNoticeRepository(db: NoticeDatabase): Promise<Notice
                THEN 'pending' ELSE notices.analysis_status END,
              last_error = CASE WHEN notices.content_hash <> excluded.content_hash
                THEN NULL ELSE notices.last_error END
-           WHERE excluded.fetched_at >= notices.fetched_at`,
+           WHERE julianday(excluded.fetched_at) >= julianday(notices.fetched_at)`,
           [
-            notice.id, notice.sourceId, notice.boardId, notice.postId, notice.sourceUrl,
-            notice.title, raw, notice.contentHash, notice.fetchedAt, notice.publishedDate,
+            notice.id,
+            notice.sourceId,
+            notice.boardId,
+            notice.postId,
+            notice.sourceUrl,
+            notice.title,
+            raw,
+            notice.contentHash,
+            notice.fetchedAt,
+            notice.publishedDate,
           ],
         );
       });
@@ -116,14 +119,16 @@ export async function createNoticeRepository(db: NoticeDatabase): Promise<Notice
     },
 
     listSavedNotices() {
-      return enqueue(() => db.getAllAsync<SavedNotice>(
-        `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
+      return enqueue(() =>
+        db.getAllAsync<SavedNotice>(
+          `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
                 u.saved_at AS savedAt, u.progress
          FROM user_notices AS u
          INNER JOIN notices AS n ON n.id = u.notice_id
          WHERE u.disposition = 'saved'
          ORDER BY u.saved_at DESC, n.id`,
-      ));
+        ),
+      );
     },
   };
 }
