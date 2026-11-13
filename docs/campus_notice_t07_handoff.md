@@ -75,6 +75,8 @@ git diff --check
 
 웹 캡처: [실제 공지 상세](screenshots/t07_real_detail.png), [저장한 실제 공지](screenshots/t07_real_home.png). Android 캡처가 아니다.
 
+2026-11-14 PR 준비 시 최신 main(`c717789`, B의 실제 수집·SQLite 연결과 UI 애니메이션 포함)을 통합했다. 카드 드래그·화면 전환·달력의 주말/오늘 표시는 유지하고, 기존 직접 수집 경로를 T07 동기화 서비스로 합쳤다. 탭은 화면 전환·카드 드래그 중 비활성 상태를 표시한다. 통합본에서 타입·전체 테스트·웹 UI 4개·Android/웹 export를 다시 확인했으며 위 웹 캡처도 갱신했다. 아래 실기기 사용자 보고는 이 main 통합 전 T07 구현의 기록이다.
+
 ## 5 실제 서버 통합 검증
 
 기존 `.env.worker-client`의 배포 `WORKER_URL`, `DEMO_ACCESS_TOKEN`이 필요하다. 비밀값을 출력하거나 명령행 인자로 전달하지 않는다.

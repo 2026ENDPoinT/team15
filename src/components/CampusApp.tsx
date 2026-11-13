@@ -785,7 +785,11 @@ export default function CampusApp() {
             key={name}
             accessibilityRole="tab"
             accessibilityLabel={name}
-            accessibilityState={{ selected: page === i }}
+            accessibilityState={{
+              selected: page === i,
+              disabled: pageTransitioning || cardDragging,
+            }}
+            disabled={pageTransitioning || cardDragging}
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >

@@ -5,7 +5,7 @@ import verified from '../../fixtures/real/worker/t05_verified.json' with { type:
 test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정과 재실행 캐시로 연결된다', async ({
   page,
 }, testInfo) => {
-  await page.clock.setFixedTime(new Date('2026-11-13T15:00:00Z'));
+  await page.clock.install({ time: new Date('2026-11-13T15:00:00Z') });
   const errors: string[] = [];
   const analyzed: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
