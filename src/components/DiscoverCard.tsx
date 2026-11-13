@@ -111,7 +111,6 @@ export default function DiscoverCard({
               : '실제 공지 · ' + notice.analysisLabel}
           </Text>
           <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
-          <Text style={styles.summary}>{notice.summary}</Text>
           <Text style={styles.muted}>{eligibilityLabel}</Text>
           <Text style={styles.muted}>
             {notice.date
@@ -173,7 +172,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#213e32' },
   muted: { fontSize: 12, lineHeight: 19, color: '#728174' },
   tags: { fontSize: 12, lineHeight: 20, color: '#28634d' },
-  summary: { fontSize: 14, lineHeight: 22, color: '#43584b' },
   detailToggle: {
     paddingHorizontal: 18,
     paddingVertical: 12,
