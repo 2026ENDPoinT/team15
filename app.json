@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "캠퍼스 공지",
+    "slug": "team15-campus-notice",
+    "version": "0.1.0",
+    "scheme": "campusnotice",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F8F7",
+    "plugins": ["expo-router"],
+    "android": { "package": "kr.team15.campusnotice" },
+    "web": { "bundler": "metro", "output": "single" }
+  }
+}
