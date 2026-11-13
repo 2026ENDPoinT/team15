@@ -40,6 +40,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  colleges,
+  type College,
+  type CampusProfile,
+} from '../domain/campusProfile';
+import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
@@ -49,7 +55,7 @@ import {
   deadlineReminderLabel,
 } from '../features/demo/noticeDetailPresentation';
 
-import type { Disposition as Bucket, Profile } from '../../shared/contracts';
+import type { Disposition as Bucket } from '../../shared/contracts';
 import { evaluateEligibility } from '../domain/eligibility';
 
 const eligibilityLabels = {
@@ -239,12 +245,12 @@ export default function CampusApp() {
     reminderWarning,
     refreshNotices,
     analyzeNotice,
-    setKeywords,
+    profile,
+    saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
-  const [keys, setKeys] = useState(['대회', '장학금']);
-  const [draft, setDraft] = useState(keys);
+  const [draft, setDraft] = useState(profile.keywords);
   const [options] = useState([
     '대회',
     '장학금',
@@ -253,12 +259,14 @@ export default function CampusApp() {
     '교환학생',
     '인공지능',
   ]);
-  const [customOptions, setCustomOptions] = useState<string[]>([]);
+  const [customOptions, setCustomOptions] = useState(profile.customKeywords);
   const [deletingKeywords, setDeletingKeywords] = useState(false);
   const [custom, setCustom] = useState('');
-  const [dept, setDept] = useState('컴퓨터공학과');
-  const [grade, setGrade] = useState('3학년');
-  const [status, setStatus] = useState('재학');
+  const [college, setCollege] = useState(profile.college);
+  const [dept, setDept] = useState(profile.department);
+  const [grade, setGrade] = useState(profile.grade);
+  const [status, setStatus] = useState(profile.enrollment);
+  const savingProfile = useRef(false);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -431,12 +439,6 @@ export default function CampusApp() {
     return true;
   };
   const [showAll, setShowAll] = useState(false);
-  const profile: Pick<Profile, 'department' | 'grade' | 'enrollment'> = {
-    department: dept,
-    grade: Number(grade.slice(0, 1)) as Profile['grade'],
-    enrollment:
-      status === '재학' ? 'enrolled' : status === '휴학' ? 'leave' : 'other',
-  };
   const eligibility = Object.fromEntries(
     notices.map(({ id }) => [
       id,
@@ -722,8 +724,8 @@ export default function CampusApp() {
                           dept,
                           grade,
                           status,
-                          keys,
-                          setKeywords,
+                          college,
+                          saveProfile,
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
@@ -745,7 +747,7 @@ export default function CampusApp() {
                           notificationSnapshot,
                           refreshReminders,
                           page === pageRef.current ? held : null,
-                          page === 1 ? keys : null,
+                          profile,
                           page === 1 ? showAll : null,
                           actions,
                           analyzeNotice,
@@ -764,20 +766,32 @@ export default function CampusApp() {
                         : page === 1
                           ? 'unseen'
                           : 'saved';
-                    const visible = notices.filter(
-                      (n) =>
-                        buckets[n.id] === bucket &&
-                        (page !== pageRef.current || !held.includes(n.id)) &&
-                        (page !== 1 ||
-                          showAll ||
-                          (eligibility[n.id]!.result !== 'mismatch' &&
-                            keys.some(
-                              (k) =>
-                                n.tags.includes(k) ||
-                                n.title.includes(k) ||
-                                n.summary.includes(k),
-                            ))),
-                    );
+                    const visible = notices.filter((notice) => {
+                      if (
+                        buckets[notice.id] !== bucket ||
+                        (page === pageRef.current && held.includes(notice.id))
+                      )
+                        return false;
+                      if (page !== 1 || showAll) return true;
+                      const detail = details[notice.id];
+                      return (
+                        matchesCollege(
+                          profile.college,
+                          notice.title,
+                          detail?.raw.bodyText ?? '',
+                          detail?.analysisFresh
+                            ? detail.analysis?.data.eligibility
+                            : undefined,
+                        ) &&
+                        eligibility[notice.id]?.result !== 'mismatch' &&
+                        profile.keywords.some(
+                          (keyword) =>
+                            notice.tags.includes(keyword) ||
+                            notice.title.includes(keyword) ||
+                            notice.summary.includes(keyword),
+                        )
+                      );
+                    });
                     const nextNotice = visible[0];
                     return (
                       <View
@@ -831,9 +845,7 @@ export default function CampusApp() {
                               }}
                             />
                             <Button
-                              label={
-                                showAll ? '키워드 맞춤 보기' : '전체 공지 보기'
-                              }
+                              label={showAll ? '맞춤 보기' : '전체 공지 보기'}
                               onPress={() => setShowAll(!showAll)}
                             />
                             <Text
@@ -1181,6 +1193,36 @@ export default function CampusApp() {
                                 <AnalysisSettings />
                                 <View style={s.card}>
                                   <Text style={s.section}>내 정보</Text>
+                                  <Text style={s.muted}>소속 단과대학</Text>
+                                  <View style={s.row}>
+                                    {(
+                                      [null, ...colleges] as (College | null)[]
+                                    ).map((value) => (
+                                      <Pressable
+                                        key={value ?? 'none'}
+                                        accessibilityRole="radio"
+                                        accessibilityState={{
+                                          checked: college === value,
+                                        }}
+                                        aria-checked={college === value}
+                                        onPress={() => setCollege(value)}
+                                        style={[
+                                          s.button,
+                                          college === value && s.primary,
+                                        ]}
+                                      >
+                                        <Text
+                                          style={
+                                            college === value
+                                              ? s.light
+                                              : s.buttonText
+                                          }
+                                        >
+                                          {value ?? '선택 안 함'}
+                                        </Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
                                   <Text style={s.muted}>학과</Text>
                                   <TextInput
                                     accessibilityLabel="학과"
@@ -1190,23 +1232,27 @@ export default function CampusApp() {
                                   />
                                   <Text style={s.muted}>학년</Text>
                                   <View style={s.row}>
-                                    {['1학년', '2학년', '3학년', '4학년'].map(
-                                      (g) => (
-                                        <Button
-                                          key={g}
-                                          label={g}
-                                          primary={grade === g}
-                                          onPress={() => setGrade(g)}
-                                        />
-                                      ),
-                                    )}
+                                    {([1, 2, 3, 4, 5] as const).map((g) => (
+                                      <Button
+                                        key={g}
+                                        label={`${g}학년`}
+                                        primary={grade === g}
+                                        onPress={() => setGrade(g)}
+                                      />
+                                    ))}
                                   </View>
                                   <Text style={s.muted}>학적 상태</Text>
                                   <View style={s.row}>
-                                    {['재학', '휴학', '졸업'].map((g) => (
+                                    {(
+                                      [
+                                        ['enrolled', '재학'],
+                                        ['leave', '휴학'],
+                                        ['other', '졸업'],
+                                      ] as const
+                                    ).map(([g, label]) => (
                                       <Button
                                         key={g}
-                                        label={g}
+                                        label={label}
                                         primary={status === g}
                                         onPress={() => setStatus(g)}
                                       />
@@ -1273,11 +1319,6 @@ export default function CampusApp() {
                                                 setDraft((old) =>
                                                   old.filter((v) => v !== k),
                                                 );
-                                                const nextKeys = keys.filter(
-                                                  (v) => v !== k,
-                                                );
-                                                setKeys(nextKeys);
-                                                setKeywords(nextKeys);
                                               } else {
                                                 setDraft((old) =>
                                                   old.includes(k)
@@ -1355,18 +1396,35 @@ export default function CampusApp() {
                                 <Button
                                   label="설정 저장"
                                   primary
-                                  onPress={() => {
+                                  onPress={async () => {
+                                    if (savingProfile.current) return;
                                     if (!draft.length) {
                                       setMessage(
                                         '선호 키워드를 하나 이상 선택해주세요.',
                                       );
                                       return;
                                     }
-                                    setKeys([...draft]);
-                                    setKeywords([...draft]);
-                                    setMessage(
-                                      '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
-                                    );
+                                    const next: CampusProfile = {
+                                      college,
+                                      department: dept.trim(),
+                                      grade,
+                                      enrollment: status,
+                                      keywords: draft,
+                                      customKeywords: customOptions,
+                                    };
+                                    savingProfile.current = true;
+                                    try {
+                                      await saveProfile(next);
+                                      setMessage(
+                                        '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
+                                      );
+                                    } catch {
+                                      setMessage(
+                                        '설정을 저장하지 못했어요. 다시 시도해 주세요.',
+                                      );
+                                    } finally {
+                                      savingProfile.current = false;
+                                    }
                                   }}
                                 />
                                 {testNotification && (

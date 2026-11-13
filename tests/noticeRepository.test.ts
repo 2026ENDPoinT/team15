@@ -286,3 +286,37 @@ for (const saveFirst of [true, false]) {
     }
   });
 }
+
+test('단과대학, 내 정보와 키워드를 저장하고 DB 재실행 후 복원한다', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'campus-profile-'));
+  const file = join(dir, 'profile.db');
+  let db = new DatabaseSync(file);
+  try {
+    const repository = await openRepository(db);
+    assert.equal(await repository.getProfile(), null);
+    const profile = {
+      college: '정보통신대학',
+      department: '전자공학과',
+      grade: 2,
+      enrollment: 'leave',
+      keywords: ['인공지능', '멘토링'],
+      customKeywords: ['멘토링', '스터디'],
+    } as const;
+    const saved = {
+      ...profile,
+      keywords: [...profile.keywords],
+      customKeywords: [...profile.customKeywords],
+    };
+    await repository.saveProfile(saved);
+    db.close();
+    db = new DatabaseSync(file);
+    const reopened = await openRepository(db);
+    assert.deepEqual(await reopened.getProfile(), saved);
+    await reopened.saveProfile({ ...saved, college: null });
+    assert.deepEqual(await reopened.getProfile(), { ...saved, college: null });
+  } finally {
+    db.close();
+    unlinkSync(file);
+    rmdirSync(dir);
+  }
+});
