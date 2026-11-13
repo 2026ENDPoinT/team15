@@ -92,3 +92,9 @@ export const migration4 = `
   ALTER TABLE user_notices ADD COLUMN permanently_deleted INTEGER NOT NULL DEFAULT 0
     CHECK (permanently_deleted IN (0, 1));
 `;
+
+export const migration5 = `
+  CREATE TABLE discovered_keywords (
+    keyword TEXT PRIMARY KEY NOT NULL
+  );
+`;

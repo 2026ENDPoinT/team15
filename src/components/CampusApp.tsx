@@ -279,6 +279,7 @@ export default function CampusApp() {
     demoNewNoticeId,
     analyzeNotice,
     profile,
+    discoveredKeywords,
     saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
@@ -294,17 +295,37 @@ export default function CampusApp() {
   }, [buckets]);
   const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
-  const [options] = useState([
-    '대회',
-    '장학금',
-    '취업',
-    '인턴십',
-    '교환학생',
-    '인공지능',
-  ]);
+  const options = Array.from(
+    new Set([
+      '대회',
+      '장학금',
+      '취업',
+      '인턴십',
+      '교환학생',
+      '인공지능',
+      ...discoveredKeywords,
+    ]),
+  );
   const [customOptions, setCustomOptions] = useState(profile.customKeywords);
   const [deletingKeywords, setDeletingKeywords] = useState(false);
   const [custom, setCustom] = useState('');
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [allKeywordsVisible, setAllKeywordsVisible] = useState(false);
+  const keywordQuery = keywordSearch.trim().toLocaleLowerCase('ko');
+  const availableKeywords = Array.from(new Set([...options, ...customOptions]))
+    .filter((keyword) =>
+      deletingKeywords
+        ? customOptions.includes(keyword) && !options.includes(keyword)
+        : !draft.includes(keyword),
+    )
+    .filter((keyword) =>
+      keyword.toLocaleLowerCase('ko').includes(keywordQuery),
+    );
+  const visibleKeywords =
+    allKeywordsVisible || keywordQuery || deletingKeywords
+      ? availableKeywords
+      : availableKeywords.slice(0, 8);
+
   const [college, setCollege] = useState(profile.college);
   const [dept, setDept] = useState(profile.department);
   const [grade, setGrade] = useState(profile.grade);
@@ -920,6 +941,8 @@ export default function CampusApp() {
                           options,
                           customOptions,
                           deletingKeywords,
+                          keywordSearch,
+                          allKeywordsVisible,
                           custom,
                           dept,
                           grade,
@@ -1565,96 +1588,128 @@ export default function CampusApp() {
                                 </View>
                                 <View style={s.card}>
                                   <Text style={s.section}>선호 키워드</Text>
+                                  <Text style={s.muted}>
+                                    선택한 키워드 · {draft.length}개
+                                  </Text>
                                   <View style={s.row}>
-                                    {options.map((k) => (
+                                    {draft.map((keyword) => (
                                       <Pressable
-                                        key={k}
+                                        key={keyword}
                                         accessibilityRole="button"
-                                        accessibilityLabel={k}
-                                        accessibilityState={{
-                                          selected: draft.includes(k),
-                                        }}
+                                        accessibilityLabel={keyword}
+                                        accessibilityHint="누르면 선택을 해제합니다"
+                                        accessibilityState={{ selected: true }}
                                         disabled={deletingKeywords}
                                         onPress={() =>
                                           setDraft((old) =>
-                                            old.includes(k)
-                                              ? old.filter((v) => v !== k)
-                                              : [...old, k],
+                                            old.filter(
+                                              (value) => value !== keyword,
+                                            ),
                                           )
                                         }
+                                        style={[s.button, s.primary]}
+                                      >
+                                        <Text style={s.light}>{keyword} ✓</Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
+                                  {!draft.length && (
+                                    <Text style={s.muted}>
+                                      아래에서 관심 있는 키워드를 선택해 주세요.
+                                    </Text>
+                                  )}
+                                  <Text style={s.muted}>
+                                    {deletingKeywords
+                                      ? '직접 추가한 키워드 삭제'
+                                      : '키워드 추가'}
+                                  </Text>
+                                  <TextInput
+                                    accessibilityLabel="키워드 검색"
+                                    placeholder="키워드 검색…"
+                                    value={keywordSearch}
+                                    onChangeText={setKeywordSearch}
+                                    style={s.input}
+                                  />
+                                  <View style={s.row}>
+                                    {visibleKeywords.map((keyword) => (
+                                      <Pressable
+                                        key={keyword}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={
+                                          deletingKeywords
+                                            ? `${keyword} 삭제`
+                                            : keyword
+                                        }
+                                        accessibilityState={{ selected: false }}
+                                        onPress={() => {
+                                          if (deletingKeywords) {
+                                            setCustomOptions((old) =>
+                                              old.filter(
+                                                (value) => value !== keyword,
+                                              ),
+                                            );
+                                            setDraft((old) =>
+                                              old.filter(
+                                                (value) => value !== keyword,
+                                              ),
+                                            );
+                                          } else {
+                                            setDraft((old) =>
+                                              old.includes(keyword)
+                                                ? old
+                                                : [...old, keyword],
+                                            );
+                                          }
+                                        }}
                                         style={[
                                           s.button,
-                                          draft.includes(k) && s.primary,
+                                          deletingKeywords &&
+                                            s.deletableKeyword,
                                         ]}
                                       >
-                                        <Text
-                                          style={
-                                            draft.includes(k)
-                                              ? s.light
-                                              : s.buttonText
-                                          }
-                                        >
-                                          {k}
+                                        <Text style={s.buttonText}>
+                                          {keyword}
                                         </Text>
                                       </Pressable>
                                     ))}
                                   </View>
-                                  {customOptions.length > 0 && (
-                                    <View style={s.customKeywords}>
-                                      <Text style={s.muted}>
-                                        직접 추가한 키워드
-                                      </Text>
-                                      <View style={s.row}>
-                                        {customOptions.map((k) => (
-                                          <Pressable
-                                            key={k}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={
-                                              deletingKeywords ? `${k} 삭제` : k
-                                            }
-                                            accessibilityState={{
-                                              selected: draft.includes(k),
-                                            }}
-                                            onPress={() => {
-                                              if (deletingKeywords) {
-                                                setCustomOptions((old) =>
-                                                  old.filter((v) => v !== k),
-                                                );
-                                                setDraft((old) =>
-                                                  old.filter((v) => v !== k),
-                                                );
-                                              } else {
-                                                setDraft((old) =>
-                                                  old.includes(k)
-                                                    ? old.filter((v) => v !== k)
-                                                    : [...old, k],
-                                                );
-                                              }
-                                            }}
-                                            style={[
-                                              s.button,
-                                              draft.includes(k) && s.primary,
-                                              deletingKeywords &&
-                                                s.deletableKeyword,
-                                            ]}
-                                          >
-                                            <Text
-                                              style={
-                                                draft.includes(k)
-                                                  ? s.light
-                                                  : s.buttonText
-                                              }
-                                            >
-                                              {k}
-                                            </Text>
-                                          </Pressable>
-                                        ))}
-                                      </View>
-                                    </View>
+                                  {!availableKeywords.length && (
+                                    <Text style={s.muted}>
+                                      {keywordQuery
+                                        ? '검색 결과가 없어요.'
+                                        : deletingKeywords
+                                          ? '삭제할 직접 추가 키워드가 없어요.'
+                                          : '모든 키워드를 선택했어요.'}
+                                    </Text>
                                   )}
+                                  {!keywordQuery &&
+                                    !deletingKeywords &&
+                                    availableKeywords.length > 8 && (
+                                      <Pressable
+                                        accessibilityRole="button"
+                                        accessibilityLabel={
+                                          allKeywordsVisible
+                                            ? '키워드 접기'
+                                            : '키워드 전체 보기'
+                                        }
+                                        accessibilityState={{
+                                          expanded: allKeywordsVisible,
+                                        }}
+                                        onPress={() =>
+                                          setAllKeywordsVisible((old) => !old)
+                                        }
+                                        style={s.button}
+                                      >
+                                        <Text style={s.buttonText}>
+                                          {allKeywordsVisible
+                                            ? '접기'
+                                            : `전체 보기 · ${availableKeywords.length}개`}
+                                        </Text>
+                                      </Pressable>
+                                    )}
                                   {deletingKeywords && (
                                     <Text style={s.deleteHint}>
-                                      빨간 테두리의 키워드를 누르면 삭제됩니다.
+                                      붉은 테두리의 키워드를 누르면 삭제됩니다.
                                     </Text>
                                   )}
                                   <TextInput
@@ -1690,9 +1745,10 @@ export default function CampusApp() {
                                             ? '삭제 취소'
                                             : '키워드 삭제'
                                         }
-                                        onPress={() =>
-                                          setDeletingKeywords((old) => !old)
-                                        }
+                                        onPress={() => {
+                                          setDeletingKeywords((old) => !old);
+                                          setKeywordSearch('');
+                                        }}
                                       />
                                     </View>
                                   </View>

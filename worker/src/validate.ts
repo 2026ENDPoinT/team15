@@ -127,12 +127,21 @@ export function validateAnalysis(
     data.activity = null;
     note('활동 정보의 근거를 원문에서 확인할 수 없습니다.');
   }
-  data.checklist = data.checklist.filter((item) => {
-    if (exists(item.evidence)) return true;
+  const attachmentsWithText = input.attachment_texts ?? [];
+  data.checklist = data.checklist.flatMap((item) => {
+    if (exists(item.evidence)) return [item];
+    const quote = normalizeText(item.evidence);
+    const matches = attachmentsWithText.filter(
+      ({ text }) => quote.length > 0 && normalizeText(text).includes(quote),
+    );
+    if (matches.length === 1) {
+      const attachment = input.attachments[matches[0]!.attachment_index]!;
+      return [{ ...item, text: item.text + ' · 출처: ' + attachment.name }];
+    }
     note(
       '근거를 확인할 수 없는 준비 항목을 제외했습니다. 원문 확인이 필요합니다.',
     );
-    return false;
+    return [];
   });
 
   data.events = data.events.map((event) => {
@@ -200,7 +209,7 @@ export function validateAnalysis(
     data.application_url = null;
     note('입력 링크·본문에서 확인되지 않은 신청 주소를 제외했습니다.');
   }
-  if (input.attachments.length > 0)
+  if (input.attachments.length > attachmentsWithText.length)
     note('첨부파일 내용은 분석하지 않았습니다. 원문에서 첨부를 확인하세요.');
   if (input.has_body_images)
     note(

@@ -147,21 +147,47 @@ export const attachmentSchema = z.strictObject({
   url: httpUrlSchema.nullable(),
 });
 
-export const analyzeNoticeRequestSchema = z.strictObject({
-  notice_id: nonBlank,
-  content_hash: contentHashSchema,
-  schema_version: z.literal(SCHEMA_VERSION),
-  extractor_version: nonBlank,
-  title: nonBlank,
-  // 이미지 중심 공지도 표현할 수 있도록 빈 본문을 허용한다.
-  body_text: z.string().max(MAX_BODY_CHARACTERS),
-  // 연도 추정의 보조 근거이며 확정 일정의 근거로 사용하지 않는다.
-  published_date: dateSchema.nullable().optional(),
-  source_url: httpUrlSchema,
-  extracted_links: z.array(extractedLinkSchema).max(MAX_LINKS),
-  attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS),
-  has_body_images: z.boolean(),
+export const attachmentTextSchema = z.strictObject({
+  attachment_index: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_ATTACHMENTS - 1),
+  sha256: contentHashSchema,
+  text: nonBlank.max(12_000),
 });
+
+export const analyzeNoticeRequestSchema = z
+  .strictObject({
+    notice_id: nonBlank,
+    content_hash: contentHashSchema,
+    schema_version: z.literal(SCHEMA_VERSION),
+    extractor_version: nonBlank,
+    title: nonBlank,
+    // 이미지 중심 공지도 표현할 수 있도록 빈 본문을 허용한다.
+    body_text: z.string().max(MAX_BODY_CHARACTERS),
+    // 연도 추정의 보조 근거이며 확정 일정의 근거로 사용하지 않는다.
+    published_date: dateSchema.nullable().optional(),
+    source_url: httpUrlSchema,
+    extracted_links: z.array(extractedLinkSchema).max(MAX_LINKS),
+    attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS),
+    attachment_texts: z.array(attachmentTextSchema).min(1).max(2).optional(),
+    has_body_images: z.boolean(),
+  })
+  .refine(
+    ({ attachments, attachment_texts }) => {
+      const indices =
+        attachment_texts?.map(({ attachment_index }) => attachment_index) ?? [];
+      return (
+        new Set(indices).size === indices.length &&
+        indices.every((index) => index < attachments.length)
+      );
+    },
+    {
+      path: ['attachment_texts'],
+      message: 'Attachment text must refer to a unique listed attachment',
+    },
+  );
 
 export const analysisEnvelopeSchema = z.strictObject({
   notice_id: nonBlank,

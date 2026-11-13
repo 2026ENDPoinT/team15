@@ -4,7 +4,7 @@ import type {
   NoticeAnalysis,
 } from '../../shared/contracts';
 import { ApiFailure, readLimitedText } from './http';
-import { modelOutputSchema, SYSTEM_INSTRUCTION } from './prompt';
+import { analysisInstruction, modelOutputSchema } from './prompt';
 import type { WorkerDependencies, WorkerEnv } from './types';
 import { validateAnalysis } from './validate';
 
@@ -58,7 +58,11 @@ export async function analyzeNotice(
         // workerd는 follow/manual을 지원한다. 리다이렉트를 따라 키를 전달하지 않는다.
         redirect: 'manual',
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+          systemInstruction: {
+            parts: [
+              { text: analysisInstruction(!!input.attachment_texts?.length) },
+            ],
+          },
           contents: [
             {
               role: 'user',
@@ -70,6 +74,16 @@ export async function analyzeNotice(
                     published_date: input.published_date ?? null,
                     extracted_links: input.extracted_links,
                     attachments: input.attachments,
+                    ...(input.attachment_texts
+                      ? {
+                          attachment_texts: input.attachment_texts.map(
+                            ({ attachment_index, text }) => ({
+                              name: input.attachments[attachment_index]!.name,
+                              text,
+                            }),
+                          ),
+                        }
+                      : {}),
                     has_body_images: input.has_body_images,
                   }),
                 },
