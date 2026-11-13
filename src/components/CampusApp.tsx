@@ -30,6 +30,10 @@ import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
 import { AnalysisSettings } from './AnalysisSettings';
+import {
+  detailReviewNotes,
+  deadlineReminderLabel,
+} from '../features/demo/noticeDetailPresentation';
 
 import type { Disposition as Bucket } from '../../shared/contracts';
 function DetailOnOpen({
@@ -220,6 +224,9 @@ export default function CampusApp() {
     checklists,
     testNotification,
     reservationStatus,
+    reminders,
+    notificationSnapshot,
+    refreshReminders,
     notices,
     home,
     syncState,
@@ -441,20 +448,17 @@ export default function CampusApp() {
                   );
                 }}
               />
-              <Text style={s.muted}>
-                {selectedDetail.raw.hasBodyImages ||
-                selectedDetail.raw.attachments.length
-                  ? '이미지·첨부 내용은 원문에서 직접 확인하세요.'
-                  : ''}
-              </Text>
-              {selectedDetail.analysisFresh &&
-                selectedDetail.analysis?.data.review_notes.map(
-                  (note, index) => (
-                    <Text key={`review-${index}`} style={s.reason}>
-                      {note}
-                    </Text>
-                  ),
-                )}
+              {detailReviewNotes(
+                selectedDetail.analysisFresh
+                  ? (selectedDetail.analysis?.data.review_notes ?? [])
+                  : [],
+                selectedDetail.raw.hasBodyImages ||
+                  selectedDetail.raw.attachments.length > 0,
+              ).map((note) => (
+                <Text key={note} style={s.reason}>
+                  {note}
+                </Text>
+              ))}
               {selectedDetail.analysisFresh &&
                 selectedDetail.analysis?.data.events.map((event, index) => (
                   <Text key={index} style={s.description}>
@@ -484,10 +488,11 @@ export default function CampusApp() {
 
           {selectedDetail?.disposition === 'saved' && (
             <>
-              <Text style={s.section}>준비물</Text>
+              <Text style={s.section}>신청·제출 체크리스트</Text>
               {selectedChecklist?.updatedChecklist && (
                 <Text style={s.reason}>
-                  준비물이 변경되었어요. 기존 체크 기록은 유지합니다. 새 목록:{' '}
+                  체크리스트가 변경되었어요. 기존 체크 기록은 유지합니다. 새
+                  목록:{' '}
                   {selectedChecklist.updatedChecklist
                     .map(({ text }) => text)
                     .join(', ')}
@@ -496,19 +501,45 @@ export default function CampusApp() {
 
               {selectedChecklist?.items.length ? (
                 selectedChecklist.items.map((item) => (
-                  <Button
+                  <Pressable
                     key={item.id}
-                    label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={item.text}
+                    accessibilityState={{ checked: item.completed }}
+                    aria-checked={item.completed}
+                    style={[s.button, item.completed && s.checkedItem]}
                     onPress={() =>
                       void updateDetail(notice.id, () =>
                         actions.setChecklistCompleted(item.id, !item.completed),
                       )
                     }
-                  />
+                  >
+                    <Text
+                      style={s.buttonText}
+                    >{`${item.completed ? '☑ 완료' : '☐ 미완료'} · ${item.text}`}</Text>
+                  </Pressable>
                 ))
               ) : (
-                <Text style={s.muted}>확인된 준비물이 없어요.</Text>
+                <Text style={s.muted}>확인된 신청·제출 항목이 없어요.</Text>
               )}
+              <View style={s.reminderStatus}>
+                <Text style={s.buttonText}>
+                  {deadlineReminderLabel(
+                    notice.id,
+                    notificationSnapshot,
+                    reminders,
+                  )}
+                </Text>
+                <Text style={s.muted}>
+                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
+                  상태이거나 예약 시각이 지났다면 예약하지 않아요. 가상 공지는
+                  테스트 예약을 사용해요.
+                </Text>
+                <Button
+                  label="알림 상태 다시 확인"
+                  onPress={() => void updateDetail(notice.id, refreshReminders)}
+                />
+              </View>
               <Text style={s.muted}>
                 신청 상태 ·{' '}
                 {selectedDetail.progress === 'applied'
@@ -1266,6 +1297,13 @@ export default function CampusApp() {
   );
 }
 const s = StyleSheet.create({
+  checkedItem: { backgroundColor: '#e8f1e8', borderColor: '#83a26c' },
+  reminderStatus: {
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5e9',
+  },
   inlineDetail: {
     borderTopWidth: 1,
     borderTopColor: '#dfe5d9',

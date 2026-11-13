@@ -72,10 +72,10 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     page.getByRole('button', { name: '닫기', exact: true }),
   ).toHaveCount(0);
   await page
-    .getByRole('button', { name: '체크하기 · 참가 신청서 준비' })
+    .getByRole('checkbox', { name: '참가 신청서 준비', checked: false })
     .click();
   await expect(
-    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+    page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '준비 중으로 변경' }).click();
   await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
@@ -85,7 +85,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+    page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
   await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
   await detailCard

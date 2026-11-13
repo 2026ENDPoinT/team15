@@ -77,10 +77,10 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   )!;
   const text = cs.envelope.data.checklist[0]!.text;
   await page
-    .getByRole('button', { name: `체크하기 · ${text}`, exact: true })
+    .getByRole('checkbox', { name: text, exact: true, checked: false })
     .click();
   await expect(
-    page.getByRole('button', { name: `체크됨 · ${text}`, exact: true }),
+    page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
   await page
     .getByRole('button', { name: '준비 중으로 변경', exact: true })
@@ -128,7 +128,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: `체크됨 · ${text}`, exact: true }),
+    page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
   await expect(
     page.getByText('신청 상태 · 준비 중', { exact: true }),
