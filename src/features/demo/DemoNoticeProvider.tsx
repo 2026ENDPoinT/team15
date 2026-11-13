@@ -44,6 +44,7 @@ import {
   type CampusProfile,
 } from '../../domain/campusProfile';
 import type { NotificationSnapshot } from './noticeDetailPresentation';
+import { developerToolsEnabled } from '../verification/developerTools';
 
 const dataListeners = new Set<() => Promise<void>>();
 const demoEnabled = process.env.EXPO_PUBLIC_NOTICE_DEMO === '1';
@@ -131,7 +132,7 @@ async function openDemoRepository() {
         }
       : undefined;
     const reservationStatus =
-      platform && reconcile
+      developerToolsEnabled && platform && reconcile
         ? async (enable: boolean) => {
             if (enable && !(await requestNotificationPermission())) {
               throw new Error('기기 설정에서 알림을 허용해 주세요.');
@@ -277,6 +278,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   analyzeNotice(id: string): Promise<void>;
   saveProfile(profile: CampusProfile): Promise<void>;
   refreshReminders(): Promise<void>;
+  enableDeadlineNotifications: (() => Promise<boolean>) | null;
   notice: typeof demoNotice;
   testNotification: (() => Promise<boolean>) | null;
   reservationStatus: ((enable: boolean) => Promise<number>) | null;
@@ -303,6 +305,7 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   const [hasAnalysisAccess, setHasAnalysisAccess] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     phase: 'idle',
+    analysisBlocked: false,
     message: null,
     analysisRetryAt: null,
   });
@@ -529,25 +532,39 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
             await reloadState(repository);
           }
         },
-        reservationStatus: deadlineNotifications
-          ? async (enable) => {
-              const { repository, reservationStatus } = await getRepository();
+        enableDeadlineNotifications: deadlineNotifications
+          ? async () => {
+              const { repository, actions } = await getRepository();
               try {
-                return (await reservationStatus?.(enable)) ?? 0;
+                const granted = await requestNotificationPermission();
+                await actions.reconcileReminders();
+                return granted;
               } finally {
                 await reloadState(repository);
               }
             }
           : null,
-        testNotification: deadlineNotifications
-          ? async () => {
-              const scheduled = await scheduleTestNotification();
-              void getRepository()
-                .then(({ actions }) => actions.reconcileReminders())
-                .catch(() => undefined);
-              return scheduled;
-            }
-          : null,
+        reservationStatus:
+          developerToolsEnabled && deadlineNotifications
+            ? async (enable) => {
+                const { repository, reservationStatus } = await getRepository();
+                try {
+                  return (await reservationStatus?.(enable)) ?? 0;
+                } finally {
+                  await reloadState(repository);
+                }
+              }
+            : null,
+        testNotification:
+          developerToolsEnabled && deadlineNotifications
+            ? async () => {
+                const scheduled = await scheduleTestNotification();
+                void getRepository()
+                  .then(({ actions }) => actions.reconcileReminders())
+                  .catch(() => undefined);
+                return scheduled;
+              }
+            : null,
       }}
     >
       {children}

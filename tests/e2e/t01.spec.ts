@@ -104,15 +104,19 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await navigateTo('설정');
   await page.getByRole('button', { name: '대회', exact: true }).click();
   await page.getByRole('button', { name: '장학금', exact: true }).click();
-  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(
-    page.getByText('선호 키워드를 하나 이상 선택해주세요.'),
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('선호 키워드를 선택하면 맞춤 공지를 볼 수 있어요.'),
   ).toBeVisible();
   await page
     .getByRole('textbox', { name: '직접 키워드 입력', exact: true })
     .fill('인공지능');
   await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
-  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect(
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('settings.png'),
     fullPage: true,

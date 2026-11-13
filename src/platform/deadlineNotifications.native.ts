@@ -122,6 +122,7 @@ export async function scheduleTestNotification(): Promise<boolean> {
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  await prepareChannel();
   const current = await Notifications.getPermissionsAsync();
   return (
     current.granted ||

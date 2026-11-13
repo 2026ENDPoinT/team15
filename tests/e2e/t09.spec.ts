@@ -67,7 +67,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await button('전체 공지 보기').click();
-  await button('실제 공지 새로고침').click();
+  await button('공지 새로고침').click();
   await expect(
     page.getByTestId('discover-card').getByText(t09Title, { exact: true }),
   ).toBeVisible();
@@ -94,7 +94,9 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
-  await button('설정 저장').click();
+  await expect(
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
   await openSaved();
   await expect(
     page.getByText('지원 조건 불일치 · 학년 조건이 입력한 프로필과 달라요.', {
@@ -104,14 +106,18 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await expect(checkedItem).toBeChecked();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('3학년').click();
-  await button('설정 저장').click();
+  await expect(
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   stage = 'changed';
   failAI = true;
   await page.clock.fastForward(31_000);
-  await button('실제 공지 새로고침').click();
+  await button('공지 새로고침').click();
   await expect(
-    page.getByText('공지 갱신 대기 중', { exact: true }),
+    page.getByText('공지 갱신이 멈췄어요. 아래 안내를 확인해 주세요.', {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText('분석 완료 0 / 1건', { exact: true }),
@@ -127,7 +133,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toHaveCount(0);
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   failAI = false;
-  await button('남은 공지 분석').click();
+  await button('다시 시도').click();
   await expect(
     page.getByText('분석 완료 1 / 1건', { exact: true }),
   ).toBeVisible();

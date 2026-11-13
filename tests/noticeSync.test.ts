@@ -311,7 +311,7 @@ test('저장한 공지는 목록 밖에서도 재수집하고 한 출처 실패�
   }
 });
 
-test('AI 큐는 동시 1건·자동 10건 제한, 수동 30초·자동 30분 재수집 제한을 지킨다', async () => {
+test('AI 큐는 동시 1건·전체 자동 분석, 수동 30초·자동 30분 재수집 제한을 지킨다', async () => {
   const { db, repository } = await openNodeNoticeRepository();
   try {
     const records = Array.from({ length: 12 }, (_, index) => ({
@@ -347,7 +347,7 @@ test('AI 큐는 동시 1건·자동 10건 제한, 수동 30초·자동 30분 재
       },
     });
     await sync.refreshNotices('manual');
-    assert.equal(calls, 10);
+    assert.equal(calls, 12);
     assert.equal(peak, 1);
     await sync.refreshNotices('manual');
     assert.equal(collections, 2);
@@ -560,7 +560,7 @@ test('숨긴 미분석 공지는 키워드가 없어도 순차 분석하고 남�
       },
     });
     await sync.refreshNotices('manual');
-    assert.equal(calls, 10);
+    assert.equal(calls, 12);
     const continuation = sync.analyzePendingNotices();
     assert.equal(sync.analyzePendingNotices(), continuation);
     await continuation;
@@ -576,3 +576,68 @@ test('숨긴 미분석 공지는 키워드가 없어도 순차 분석하고 남�
     db.close();
   }
 });
+
+for (const code of ['NETWORK_ERROR', 'RATE_LIMITED', 'UNAUTHORIZED'] as const) {
+  test(`${code}: 10건 이후 실패 시 멈추고 재시도는 성공 캐시와 수집 결과를 재사용한다`, async () => {
+    const { db, repository } = await openNodeNoticeRepository();
+    try {
+      const records = Array.from({ length: 12 }, (_, index) => ({
+        ...normal,
+        id: `seoultech_cs:58476:${300 + index}`,
+        postId: String(300 + index),
+      }));
+      let time = new Date('2026-11-13T15:00:00Z');
+      let calls = 0;
+      let collections = 0;
+      const sync = createNoticeSync({
+        repository,
+        randomUUID,
+        now: () => time,
+        collector: { sha256: nodeSha256 },
+        collectSource: async (...args) => {
+          collections++;
+          return source(records)(...args);
+        },
+        analyze: async (request) => {
+          calls++;
+          if (calls === 11) throw new AnalysisClientError(code, 60);
+          return {
+            ...normalNoticeFixture.analysis,
+            notice_id: request.notice_id,
+          };
+        },
+      });
+      await sync.refreshNotices('manual');
+      assert.equal(calls, 11);
+      assert.equal(sync.getStatus().phase, 'idle');
+      assert.equal(
+        (await repository.listNoticeRecords()).filter(
+          (record) => record.analysisFresh,
+        ).length,
+        10,
+      );
+      if (code !== 'NETWORK_ERROR') {
+        await sync.analyzePendingNotices();
+        assert.equal(calls, 11);
+        if (code === 'RATE_LIMITED') time = new Date(time.getTime() + 60_001);
+        else {
+          assert.equal(sync.getStatus().analysisBlocked, true);
+          sync.resetAccess();
+          assert.equal(sync.getStatus().analysisBlocked, false);
+        }
+      }
+      const retry = sync.analyzePendingNotices();
+      assert.equal(sync.analyzePendingNotices(), retry);
+      await retry;
+      assert.equal(calls, 13);
+      assert.equal(collections, 2);
+      assert.ok(
+        (await repository.listNoticeRecords()).every(
+          (record) => record.analysisFresh,
+        ),
+      );
+    } finally {
+      db.close();
+    }
+  });
+}

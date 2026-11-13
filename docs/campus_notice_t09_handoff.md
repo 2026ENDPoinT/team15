@@ -87,7 +87,7 @@ npm run t09:live-smoke
 npm run start -- --go --clear
 ```
 
-개발 앱의 **맞춤 공지 → T09 변경·알림 검증 열기**로 이동한다. 결과의 `osReservations` 배열 길이, `identifier`, `fireAt`, `checklist.items[].id/completed`, `reminders[].state`를 비교한다. 비밀 토큰은 이 화면에 표시하지 않는다.
+개발 앱의 **설정 → 개발자 도구 → T09 변경·알림 검증 열기**로 이동한다. 결과의 `osReservations` 배열 길이, `identifier`, `fireAt`, `checklist.items[].id/completed`, `reminders[].state`를 비교한다. 비밀 토큰은 이 화면에 표시하지 않는다.
 
 - [x] **1. 가상 공지 저장·예약**: OS 1건, 준비 중, 체크 완료. 초기 ID·fireAt·체크 UUID 기록. 반복 실행해도 예약 1건.
 - [x] **2. 본문 변경·AI 실패**: `analysisFresh=false`, `analysisStatus=failed`, OS 0건. 체크 UUID·완료·준비 중 보존.

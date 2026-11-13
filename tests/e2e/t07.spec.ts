@@ -69,7 +69,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     .getByRole('button', { name: '전체 공지 보기', exact: true })
     .click();
   await page
-    .getByRole('button', { name: '실제 공지 새로고침', exact: true })
+    .getByRole('button', { name: '공지 새로고침', exact: true })
     .click();
   await expect(
     page.getByText('분석 완료 0 / 2건', { exact: true }),
@@ -95,6 +95,12 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     path: testInfo.outputPath('analysis_in_progress.png'),
     fullPage: true,
   });
+  await expect(
+    page.getByRole('button', { name: '남은 공지 분석', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '다시 시도', exact: true }),
+  ).toHaveCount(0);
   releaseAnalysis();
   await expect(
     page.getByText('분석 완료 2 / 2건', { exact: true }),
