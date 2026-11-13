@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
-const root = resolve('dist/web');
+const root = resolve(process.env.EXPO_WEB_TEST_DIR ?? 'dist/web');
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',

@@ -17,6 +17,10 @@ import { ActionButton, Screen, styles } from '../../components/ui';
 import { createNoticeRepository } from '../../db/noticeRepository';
 import { createNoticeActions } from '../../services/noticeActions';
 import { demoNotice } from './demoNotice';
+import { notices } from './campusNotices';
+import { collectedNoticeSchema } from '../../../shared/contracts';
+import { hashNoticeContent } from '../../../shared/canonicalize';
+import { toAnalyzeNoticeRequest } from '../../../shared/mappers';
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -40,6 +44,25 @@ async function openDemoRepository() {
       await repository.applyAnalysis(analysis);
       await repository.saveNotice(notice.id);
     }
+    for (const sample of notices) {
+      if (await repository.getNoticeDetail(sample.id)) continue;
+      const raw = collectedNoticeSchema.parse({
+        ...notice,
+        id: sample.id,
+        postId: sample.id.split(':')[2],
+        title: sample.title,
+        bodyText: sample.summary,
+        sourceUrl: `https://example.invalid/synthetic/notices/${sample.id}`,
+        extractedLinks: [],
+      });
+      const contentHash = await hashNoticeContent(
+        toAnalyzeNoticeRequest(raw),
+        (text) => digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+      );
+      await repository.upsertRawNotice({ ...raw, contentHash });
+      if (sample.org === '국제교류처')
+        await repository.dismissNotice(sample.id);
+    }
     return repository;
   } catch (error) {
     await db.closeAsync();
@@ -59,10 +82,24 @@ function getRepository() {
 async function readState(repository: Repository) {
   const home = await repository.getHomeModel();
   const checklist = await repository.getChecklist(demoNotice.id);
+  const entries = await Promise.all(
+    notices.map(async ({ id }) => ({
+      id,
+      detail: await repository.getNoticeDetail(id),
+      checklist: await repository.getChecklist(id),
+    })),
+  );
   return {
     home,
     checklist,
     saved: home.notices.some(({ id }) => id === demoNotice.id),
+    buckets: Object.fromEntries(
+      entries.map(({ id, detail }) => [id, detail?.disposition ?? 'unseen']),
+    ),
+    details: Object.fromEntries(entries.map(({ id, detail }) => [id, detail])),
+    checklists: Object.fromEntries(
+      entries.map(({ id, checklist }) => [id, checklist]),
+    ),
   };
 }
 
@@ -70,8 +107,12 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   notice: typeof demoNotice;
   actions: Pick<
     ReturnType<typeof createNoticeActions>,
-    'saveNotice' | 'unsaveNotice' | 'setProgress' | 'setChecklistCompleted'
-  >;
+    | 'saveNotice'
+    | 'unsaveNotice'
+    | 'dismissNotice'
+    | 'setProgress'
+    | 'setChecklistCompleted'
+  > & { restoreNotice(id: string): Promise<void> };
 };
 
 const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
@@ -119,16 +160,22 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   }
 
   async function update(
-    write: (actions: ReturnType<typeof createNoticeActions>) => Promise<void>,
+    write: (
+      actions: ReturnType<typeof createNoticeActions>,
+      repository: Repository,
+    ) => Promise<void>,
   ) {
     const repository = await getRepository();
-    await write(createNoticeActions(repository));
+    await write(createNoticeActions(repository), repository);
     setState(await readState(repository));
   }
 
   const actions: DemoNoticeState['actions'] = {
     saveNotice: (id) => update((actions) => actions.saveNotice(id)),
     unsaveNotice: (id) => update((actions) => actions.unsaveNotice(id)),
+    dismissNotice: (id) => update((actions) => actions.dismissNotice(id)),
+    restoreNotice: (id) =>
+      update((_, repository) => repository.restoreNotice(id)),
     setProgress: (id, progress) =>
       update((actions) => actions.setProgress(id, progress)),
     setChecklistCompleted: (id, completed) =>

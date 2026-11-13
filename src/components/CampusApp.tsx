@@ -11,64 +11,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Bucket = 'unseen' | 'saved' | 'dismissed';
-type Notice = {
-  id: string;
-  title: string;
-  org: string;
-  tags: string[];
-  date: string | null;
-  time: string | null;
-  summary: string;
-};
-const notices: Notice[] = [
-  {
-    id: 'hackathon',
-    title: 'AI 캠퍼스 해커톤 참가자 모집',
-    org: '창업지원단',
-    tags: ['대회', '인공지능'],
-    date: '2026-11-20',
-    time: '18:00',
-    summary: '아이디어를 서비스로 만들어보는 캠퍼스 해커톤입니다.',
-  },
-  {
-    id: 'scholarship',
-    title: '2026학년도 2학기 장학금 신청 안내',
-    org: '학생지원과',
-    tags: ['장학금'],
-    date: '2026-11-25',
-    time: '17:00',
-    summary: '장학금 신청 자격과 제출 서류를 확인하세요.',
-  },
-  {
-    id: 'career',
-    title: '개발자를 위한 취업 포트폴리오 특강',
-    org: '대학일자리본부',
-    tags: ['취업', '인턴십'],
-    date: '2026-11-27',
-    time: '16:00',
-    summary: '개발 직무 포트폴리오 준비 방법을 알아보는 특강입니다.',
-  },
-  {
-    id: 'exchange',
-    title: '겨울학기 글로벌 교류 프로그램 설명회',
-    org: '국제교류처',
-    tags: ['교환학생'],
-    date: '2026-12-03',
-    time: '14:00',
-    summary: '해외 대학 교류 프로그램의 일정과 준비 사항을 소개합니다.',
-  },
-  {
-    id: 'lab',
-    title: '학부생 AI 연구 프로젝트 참여자 추가 모집',
-    org: '컴퓨터공학과',
-    tags: ['인공지능', '대회'],
-    date: null,
-    time: null,
-    summary:
-      '연구 프로젝트에 관심 있는 학부생을 추가 모집합니다. 일정은 추후 안내합니다.',
-  },
-];
+import { notices, type Notice } from '../features/demo/campusNotices';
+import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
+import type { Disposition as Bucket } from '../../shared/contracts';
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
 const green = '#28634d';
 function Button({
@@ -172,13 +117,8 @@ export default function CampusApp() {
   const [page, setPage] = useState(2);
   const pageRef = useRef(page);
   pageRef.current = page;
-  const [buckets, setBuckets] = useState<Record<string, Bucket>>({
-    hackathon: 'saved',
-    scholarship: 'unseen',
-    career: 'unseen',
-    exchange: 'dismissed',
-    lab: 'unseen',
-  });
+  const { buckets, actions, details, checklists } = useDemoNotice();
+  const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
   const [keys, setKeys] = useState(['대회', '장학금']);
   const [draft, setDraft] = useState(keys);
@@ -214,21 +154,28 @@ export default function CampusApp() {
       if (Math.abs(g.dx) >= 56) navigate(pageRef.current + (g.dx < 0 ? 1 : -1));
     },
   });
-  const act = (id: string, action: string) => {
+  const act = async (id: string, action: string) => {
     if (action === 'hold') {
       setHeld((old) => [...old, id]);
       setMessage('보류했어요. 다른 화면에 다녀오면 다시 나타나요.');
       return;
     }
-    const target: Record<string, Bucket> = {
-      discard: 'dismissed',
-      select: 'saved',
-      restore: 'unseen',
-      unselect: 'unseen',
-    };
-    const next = target[action];
-    if (!next) return;
-    setBuckets((old) => ({ ...old, [id]: next }));
+    const write = {
+      discard: actions.dismissNotice,
+      select: actions.saveNotice,
+      restore: actions.restoreNotice,
+      unselect: actions.unsaveNotice,
+    }[action as 'discard' | 'select' | 'restore' | 'unselect'];
+    if (!write || changing.current) return;
+    changing.current = true;
+    try {
+      await write(id);
+    } catch {
+      setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
+      return;
+    } finally {
+      changing.current = false;
+    }
     setMessage(
       (
         {
@@ -257,6 +204,21 @@ export default function CampusApp() {
   const events = saved.filter(
     (n) => n.date?.startsWith(prefix) && (!picked || n.date === picked),
   );
+  const selectedDetail = detail ? details[detail.id] : undefined;
+  const selectedChecklist = detail ? checklists[detail.id] : undefined;
+  const [detailError, setDetailError] = useState(false);
+  async function updateDetail(write: () => Promise<void>) {
+    if (changing.current) return;
+    changing.current = true;
+    setDetailError(false);
+    try {
+      await write();
+    } catch {
+      setDetailError(true);
+    } finally {
+      changing.current = false;
+    }
+  }
   const addKey = () => {
     const k = custom.trim();
     if (!k) return;
@@ -406,7 +368,10 @@ export default function CampusApp() {
                   notice={n}
                   bucket={bucket}
                   act={(action) => act(n.id, action)}
-                  detail={() => setDetail(n)}
+                  detail={() => {
+                    setDetailError(false);
+                    setDetail(n);
+                  }}
                 />
               ))}
               {!visible.length && (
@@ -516,8 +481,8 @@ export default function CampusApp() {
             </>
           )}
           <Text style={s.muted}>
-            가상 예시 공지입니다. 변경 내용은 앱 실행 중에만 유지되며, 실제
-            수집·AI 분석·알림은 연결되지 않았습니다.
+            가상 예시 공지입니다. 공지 선택과 준비물 체크는 이 기기에
+            저장됩니다.
           </Text>
         </ScrollView>
       </View>
@@ -567,6 +532,62 @@ export default function CampusApp() {
                 ? `${detail.org}\n\n${detail.summary}\n\n${detail.date ? `${detail.date} ${detail.time} KST` : '일정 미정 · 원문 확인 필요'}\n\n가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.`
                 : '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 다른 화면에 갔다 돌아오면 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'}
             </Text>
+            {detail && selectedDetail?.disposition === 'saved' && (
+              <>
+                <Text style={s.section}>준비물</Text>
+                {selectedChecklist?.items.length ? (
+                  selectedChecklist.items.map((item) => (
+                    <Button
+                      key={item.id}
+                      label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
+                      onPress={() =>
+                        void updateDetail(() =>
+                          actions.setChecklistCompleted(
+                            item.id,
+                            !item.completed,
+                          ),
+                        )
+                      }
+                    />
+                  ))
+                ) : (
+                  <Text style={s.muted}>확인된 준비물이 없어요.</Text>
+                )}
+                <Text style={s.muted}>
+                  신청 상태 ·{' '}
+                  {selectedDetail.progress === 'applied'
+                    ? '신청 완료'
+                    : selectedDetail.progress === 'preparing'
+                      ? '준비 중'
+                      : '관심 저장'}
+                </Text>
+                {selectedDetail.progress !== 'preparing' && (
+                  <Button
+                    label="준비 중으로 변경"
+                    onPress={() =>
+                      void updateDetail(() =>
+                        actions.setProgress(detail.id, 'preparing'),
+                      )
+                    }
+                  />
+                )}
+                {selectedDetail.progress !== 'applied' && (
+                  <Button
+                    label="신청 완료로 변경"
+                    onPress={() =>
+                      void updateDetail(() =>
+                        actions.setProgress(detail.id, 'applied'),
+                      )
+                    }
+                  />
+                )}
+                {detailError && (
+                  <Text accessibilityRole="alert">
+                    변경 내용을 저장하지 못했어요.
+                  </Text>
+                )}
+              </>
+            )}
             <Button
               label="닫기"
               primary
