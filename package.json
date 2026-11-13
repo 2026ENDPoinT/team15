@@ -15,14 +15,19 @@
     "build:web": "expo export --platform web --output-dir dist/web",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --experimental-test-isolation=none tests/*.test.ts",
-    "format": "prettier --write app src shared fixtures tests package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md",
-    "format:check": "prettier --check app src shared fixtures tests package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md",
+    "format": "prettier --write app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md",
+    "format:check": "prettier --check app src shared fixtures tests scripts package.json app.json playwright.config.ts tsconfig.json README.md docs/campus_notice_c_startup_plan.md docs/campus_notice_t01_handoff.md docs/campus_notice_t02_handoff.md",
     "check": "npm run typecheck && npm test && npm run format:check",
-    "test:e2e": "npm run build:web && playwright test"
+    "test:e2e": "npm run build:web && playwright test",
+    "collect:smoke": "node --import tsx scripts/collect_smoke.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
     "@expo/vector-icons": "15.1.1",
+    "css-select": "7.0.0",
+    "domhandler": "6.0.1",
+    "domutils": "4.0.2",
+    "esbuild": "^0.28.2",
     "expo": "58.0.25",
     "expo-constants": "58.0.16",
     "expo-crypto": "~58.0.8",
@@ -32,6 +37,7 @@
     "expo-router": "58.0.31",
     "expo-sqlite": "~58.0.17",
     "expo-status-bar": "58.0.5",
+    "htmlparser2": "12.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -49,5 +55,8 @@
     "prettier": "3.10.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

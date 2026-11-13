@@ -1,4 +1,5 @@
 import { useRef, useState, type ComponentRef } from 'react';
+import { router } from 'expo-router';
 import {
   Modal,
   PanResponder,
@@ -551,6 +552,12 @@ export default function CampusApp() {
                 </View>
               )}
             </>
+          )}
+          {__DEV__ && page === 1 && (
+            <Button
+              label="T02 수집 검증 열기"
+              onPress={() => router.push('/dev/collection')}
+            />
           )}
           <Text style={s.muted}>
             가상 예시 공지입니다. 공지 선택과 준비물 체크는 이 기기에
