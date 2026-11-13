@@ -1,3 +1,7 @@
+import { CampusButton } from './CampusButton';
+import { campusStyles as s } from './campusStyles';
+import { NoticeCalendar } from './NoticeCalendar';
+import { ProfileFields } from './ProfileFields';
 import { noticeCardStyles as cardStyles } from './noticeCardStyles';
 import { NoticeSourceButton } from './NoticeSourceButton';
 import { NoticeProgressSelect } from './NoticeProgressSelect';
@@ -42,7 +46,6 @@ import {
   Linking,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
@@ -50,11 +53,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  colleges,
-  type College,
-  type CampusProfile,
-} from '../domain/campusProfile';
+import type { CampusProfile } from '../domain/campusProfile';
 import {
   attendanceFollowUpEnded,
   eventNoticeEnded,
@@ -95,42 +94,6 @@ function DetailOnOpen({
   return <>{children}</>;
 }
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
-const green = '#28634d';
-function Button({
-  label,
-  accessibilityLabel = label,
-  onPress,
-  primary = false,
-  disabled = false,
-  half = false,
-  cardAction = false,
-}: {
-  label: string;
-  accessibilityLabel?: string;
-  onPress: () => void;
-  primary?: boolean;
-  disabled?: boolean;
-  half?: boolean;
-  cardAction?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={[
-        s.button,
-        cardAction && cardStyles.button,
-        half && { flex: 1 },
-        primary && s.primary,
-      ]}
-    >
-      <Text style={[s.buttonText, primary && s.light]}>{label}</Text>
-    </Pressable>
-  );
-}
 function SwipeCard({
   notice,
   bucket,
@@ -242,7 +205,7 @@ function SwipeCard({
         </View>
         <View style={cardStyles.listActions}>
           {bucket === 'saved' ? (
-            <Button
+            <CampusButton
               cardAction
               label="← 휴지통으로 이동"
               onPress={() => act('discard')}
@@ -250,22 +213,26 @@ function SwipeCard({
           ) : (
             <>
               {bucket === 'unseen' && (
-                <Button
+                <CampusButton
                   cardAction
                   label="← 버리기"
                   onPress={() => act('discard')}
                 />
               )}
               {bucket === 'dismissed' ? (
-                <Button
+                <CampusButton
                   cardAction
                   label="← 삭제"
                   onPress={() => act('delete')}
                 />
               ) : (
-                <Button cardAction label="↕ 보류" onPress={() => act('hold')} />
+                <CampusButton
+                  cardAction
+                  label="↕ 보류"
+                  onPress={() => act('hold')}
+                />
               )}
-              <Button
+              <CampusButton
                 cardAction
                 label={bucket === 'dismissed' ? '복구 →' : '선택 →'}
                 primary
@@ -601,7 +568,6 @@ export default function CampusApp() {
     ]),
   );
 
-  const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
   const endedNoticeIds = new Set(
     notices
       .filter((notice) => {
@@ -632,12 +598,6 @@ export default function CampusApp() {
         );
       })
       .map(({ id }) => id),
-  );
-  const events = home.schedule.filter(
-    (event) =>
-      !endedNoticeIds.has(event.noticeId) &&
-      event.date.startsWith(prefix) &&
-      (!picked || event.date === picked),
   );
   const [detailUpdating, setDetailUpdating] = useState(false);
   const [pendingProgress, setPendingProgress] = useState<
@@ -788,7 +748,7 @@ export default function CampusApp() {
             </>
           )}
           {!notice.synthetic && analysis?.application_url && (
-            <Button
+            <CampusButton
               label="신청 페이지 열기"
               onPress={() => {
                 void Linking.openURL(analysis.application_url!).catch(() =>
@@ -822,7 +782,7 @@ export default function CampusApp() {
           {!notice.synthetic && selectedDetail && (
             <>
               {selectedDetail.disposition !== 'saved' && (
-                <Button
+                <CampusButton
                   label="관심 저장"
                   disabled={detailUpdating}
                   onPress={() =>
@@ -842,7 +802,7 @@ export default function CampusApp() {
                   <Text style={s.reason}>
                     마감이 변경되었어요. 새 일정을 확인해 주세요.
                   </Text>
-                  <Button
+                  <CampusButton
                     label="마감 변경 확인"
                     disabled={detailUpdating}
                     onPress={() =>
@@ -912,7 +872,7 @@ export default function CampusApp() {
       <View style={s.header}>
         <Text style={s.brand}>GongMoa</Text>
 
-        <Button label="도움말" onPress={() => setHelp(true)} />
+        <CampusButton label="도움말" onPress={() => setHelp(true)} />
       </View>
       {!!reminderWarning &&
         (page !== 1 || reminderWarning !== syncStatus.message) && (
@@ -1152,7 +1112,7 @@ export default function CampusApp() {
                                     syncStatus.phase === 'idle' &&
                                     (hasAnalysisAccess &&
                                     !syncStatus.analysisBlocked ? (
-                                      <Button
+                                      <CampusButton
                                         label="다시 시도"
                                         disabled={
                                           !!syncStatus.analysisRetryAt &&
@@ -1165,7 +1125,7 @@ export default function CampusApp() {
                                         }
                                       />
                                     ) : (
-                                      <Button
+                                      <CampusButton
                                         label="AI 분석 설정하기"
                                         onPress={() => navigate(3)}
                                       />
@@ -1235,7 +1195,7 @@ export default function CampusApp() {
                                       ? '새 공지가 없어요.'
                                       : '선호 키워드에 맞는 새 공지가 없어요.'}
                                 </Text>
-                                <Button
+                                <CampusButton
                                   label="키워드 수정하기 →"
                                   onPress={() => navigate(3)}
                                 />
@@ -1287,174 +1247,24 @@ export default function CampusApp() {
                                 <Text style={s.description}>
                                   {confirmedCardText(demoPreview.summary)}
                                 </Text>
-                                <Button
+                                <CampusButton
                                   label="맞춤 공지에서 보기"
                                   onPress={() => navigate(1)}
                                 />
                               </View>
                             )}
                             {page === 2 && (
-                              <View style={s.card}>
-                                <View style={s.between}>
-                                  <Button
-                                    label="<"
-                                    accessibilityLabel="이전 달"
-                                    onPress={() => {
-                                      setMonth(
-                                        new Date(
-                                          month.getFullYear(),
-                                          month.getMonth() - 1,
-                                          1,
-                                        ),
-                                      );
-                                      setPicked(null);
-                                    }}
-                                  />
-                                  <Text style={s.cardTitle}>
-                                    {month.getFullYear()}년{' '}
-                                    {month.getMonth() + 1}월
-                                  </Text>
-                                  <Button
-                                    label=">"
-                                    accessibilityLabel="다음 달"
-                                    onPress={() => {
-                                      setMonth(
-                                        new Date(
-                                          month.getFullYear(),
-                                          month.getMonth() + 1,
-                                          1,
-                                        ),
-                                      );
-                                      setPicked(null);
-                                    }}
-                                  />
-                                </View>
-                                <View>
-                                  <View style={s.calendarRow}>
-                                    {[
-                                      '일',
-                                      '월',
-                                      '화',
-                                      '수',
-                                      '목',
-                                      '금',
-                                      '토',
-                                    ].map((d, weekday) => (
-                                      <View key={d} style={s.cell}>
-                                        <Text
-                                          style={[
-                                            s.muted,
-                                            weekday === 0 && s.sunday,
-                                            weekday === 6 && s.saturday,
-                                          ]}
-                                        >
-                                          {d}
-                                        </Text>
-                                      </View>
-                                    ))}
-                                  </View>
-                                  {Array.from(
-                                    {
-                                      length: Math.ceil(
-                                        (month.getDay() +
-                                          new Date(
-                                            month.getFullYear(),
-                                            month.getMonth() + 1,
-                                            0,
-                                          ).getDate()) /
-                                          7,
-                                      ),
-                                    },
-                                    (_, week) => (
-                                      <View key={week} style={s.calendarRow}>
-                                        {Array.from(
-                                          { length: 7 },
-                                          (_, weekday) => {
-                                            const i =
-                                              week * 7 +
-                                              weekday -
-                                              month.getDay();
-                                            const days = new Date(
-                                              month.getFullYear(),
-                                              month.getMonth() + 1,
-                                              0,
-                                            ).getDate();
-                                            if (i < 0 || i >= days)
-                                              return (
-                                                <View
-                                                  key={weekday}
-                                                  style={s.cell}
-                                                />
-                                              );
-                                            const date =
-                                              prefix +
-                                              String(i + 1).padStart(2, '0');
-
-                                            const hasEvent = home.schedule.some(
-                                              (event) =>
-                                                !endedNoticeIds.has(
-                                                  event.noticeId,
-                                                ) && event.date === date,
-                                            );
-                                            return (
-                                              <Pressable
-                                                key={date}
-                                                accessibilityRole="button"
-                                                accessibilityLabel={`${date}, 일정 ${hasEvent ? 1 : 0}개`}
-                                                accessibilityState={{
-                                                  selected: picked === date,
-                                                }}
-                                                onPress={() =>
-                                                  setPicked(
-                                                    picked === date
-                                                      ? null
-                                                      : date,
-                                                  )
-                                                }
-                                                style={[
-                                                  s.cell,
-                                                  picked === date && s.primary,
-                                                  date === today && s.today,
-                                                ]}
-                                              >
-                                                <Text
-                                                  style={[
-                                                    picked === date
-                                                      ? s.light
-                                                      : s.buttonText,
-                                                    weekday === 0 && s.sunday,
-                                                    weekday === 6 && s.saturday,
-                                                  ]}
-                                                >
-                                                  {i + 1}
-                                                </Text>
-                                                <Text
-                                                  style={[
-                                                    s.dot,
-                                                    picked === date && s.light,
-                                                  ]}
-                                                >
-                                                  {hasEvent ? '•' : ' '}
-                                                </Text>
-                                              </Pressable>
-                                            );
-                                          },
-                                        )}
-                                      </View>
-                                    ),
-                                  )}
-                                </View>
-                                <Text style={s.reason}>
-                                  {events.length
-                                    ? events
-                                        .map(
-                                          (event) =>
-                                            `${event.date}${event.time ? ` ${event.time}` : ''} · ${event.label} · ${event.title}`,
-                                        )
-                                        .join('\n')
-                                    : '선택한 일정이 없어요.'}
-                                </Text>
-                              </View>
+                              <NoticeCalendar
+                                month={month}
+                                today={today}
+                                picked={picked}
+                                schedule={home.schedule.filter(
+                                  (event) =>
+                                    !endedNoticeIds.has(event.noticeId),
+                                )}
+                                onChangeMonth={setMonth}
+                                onPickDate={setPicked}
+                              />
                             )}
                             {page !== 3 ? (
                               <>
@@ -1496,7 +1306,7 @@ export default function CampusApp() {
                                             : '아직 선택한 공지가 없어요.'}
                                     </Text>
                                     {page !== 0 && (
-                                      <Button
+                                      <CampusButton
                                         label={
                                           page === 1
                                             ? '키워드 설정하기 →'
@@ -1513,74 +1323,16 @@ export default function CampusApp() {
                             ) : (
                               <>
                                 <AnalysisSettings />
-                                <View style={s.card}>
-                                  <Text style={s.section}>내 정보</Text>
-                                  <Text style={s.muted}>소속 단과대학</Text>
-                                  <View style={s.row}>
-                                    {(
-                                      [null, ...colleges] as (College | null)[]
-                                    ).map((value) => (
-                                      <Pressable
-                                        key={value ?? 'none'}
-                                        accessibilityRole="radio"
-                                        accessibilityState={{
-                                          checked: college === value,
-                                        }}
-                                        aria-checked={college === value}
-                                        onPress={() => setCollege(value)}
-                                        style={[
-                                          s.button,
-                                          college === value && s.primary,
-                                        ]}
-                                      >
-                                        <Text
-                                          style={
-                                            college === value
-                                              ? s.light
-                                              : s.buttonText
-                                          }
-                                        >
-                                          {value ?? '선택 안 함'}
-                                        </Text>
-                                      </Pressable>
-                                    ))}
-                                  </View>
-                                  <Text style={s.muted}>학과</Text>
-                                  <TextInput
-                                    accessibilityLabel="학과"
-                                    value={dept}
-                                    onChangeText={setDept}
-                                    style={s.input}
-                                  />
-                                  <Text style={s.muted}>학년</Text>
-                                  <View style={s.row}>
-                                    {([1, 2, 3, 4, 5] as const).map((g) => (
-                                      <Button
-                                        key={g}
-                                        label={`${g}학년`}
-                                        primary={grade === g}
-                                        onPress={() => setGrade(g)}
-                                      />
-                                    ))}
-                                  </View>
-                                  <Text style={s.muted}>학적 상태</Text>
-                                  <View style={s.row}>
-                                    {(
-                                      [
-                                        ['enrolled', '재학'],
-                                        ['leave', '휴학'],
-                                        ['other', '졸업'],
-                                      ] as const
-                                    ).map(([g, label]) => (
-                                      <Button
-                                        key={g}
-                                        label={label}
-                                        primary={status === g}
-                                        onPress={() => setStatus(g)}
-                                      />
-                                    ))}
-                                  </View>
-                                </View>
+                                <ProfileFields
+                                  college={college}
+                                  department={dept}
+                                  grade={grade}
+                                  enrollment={status}
+                                  onCollegeChange={setCollege}
+                                  onDepartmentChange={setDept}
+                                  onGradeChange={setGrade}
+                                  onEnrollmentChange={setStatus}
+                                />
                                 <View style={s.card}>
                                   <Text style={s.section}>선호 키워드</Text>
                                   <Text style={s.muted}>
@@ -1734,7 +1486,7 @@ export default function CampusApp() {
                                       </Pressable>
                                     </View>
                                     <View style={{ flex: 3 }}>
-                                      <Button
+                                      <CampusButton
                                         label={
                                           deletingKeywords
                                             ? '삭제 취소'
@@ -1767,7 +1519,7 @@ export default function CampusApp() {
                                   </Text>
                                 )}
                                 {profileSaveState === 'error' && (
-                                  <Button
+                                  <CampusButton
                                     label="설정 저장 다시 시도"
                                     onPress={() =>
                                       setProfileRetry((value) => value + 1)
@@ -1776,7 +1528,7 @@ export default function CampusApp() {
                                 )}
                                 <NotificationSettings />
                                 {developerToolsEnabled && (
-                                  <Button
+                                  <CampusButton
                                     label="개발자 도구"
                                     onPress={() => router.push('/dev')}
                                   />
@@ -1847,7 +1599,7 @@ export default function CampusApp() {
               }
             </Text>
 
-            <Button
+            <CampusButton
               label="닫기"
               primary
               onPress={() => {
@@ -1860,177 +1612,3 @@ export default function CampusApp() {
     </SafeAreaView>
   );
 }
-const s = StyleSheet.create({
-  checkedItem: { backgroundColor: '#e8f1e8', borderColor: '#83a26c' },
-
-  inlineDetail: {
-    borderTopWidth: 1,
-    borderTopColor: '#dfe5d9',
-    paddingTop: 16,
-    gap: 14,
-  },
-  analysisProgress: { gap: 4 },
-  discoverPage: {
-    flex: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    padding: 12,
-    gap: 8,
-  },
-
-  pageViewport: { flex: 1, overflow: 'hidden' },
-  safe: { flex: 1, backgroundColor: '#f7f8f3' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderColor: '#dfe5d9',
-    gap: 8,
-  },
-  brand: { fontSize: 30, fontWeight: '900', color: '#213e32' },
-  content: {
-    padding: 28,
-    gap: 16,
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    paddingBottom: 40,
-  },
-  title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
-  description: { fontSize: 14, lineHeight: 24, color: '#728174' },
-  muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
-  keywordActions: { flexDirection: 'row', gap: 7 },
-  customKeywords: {
-    borderTopWidth: 1,
-    borderTopColor: '#dfe5d9',
-    paddingTop: 14,
-    gap: 10,
-  },
-  deletableKeyword: { borderColor: '#cf3434', borderWidth: 2 },
-  deleteHint: { color: '#b52e2e', fontSize: 12 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  between: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 6,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    borderRadius: 20,
-    padding: 18,
-    gap: 14,
-  },
-  cardTitle: {
-    color: '#213e32',
-    fontSize: 18,
-    lineHeight: 27,
-    fontWeight: '700',
-    flexShrink: 1,
-  },
-  section: { color: '#213e32', fontSize: 17, fontWeight: '700' },
-  noticeStatusTags: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tag: {
-    color: '#56713f',
-    fontSize: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#edf2e2',
-    borderRadius: 7,
-  },
-  reason: {
-    backgroundColor: '#f1f5e9',
-    padding: 12,
-    borderRadius: 10,
-    color: '#213e32',
-    fontSize: 12,
-    lineHeight: 21,
-  },
-  button: {
-    minHeight: 42,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: { backgroundColor: green, borderColor: green, borderRadius: 12 },
-  buttonText: { color: green, fontSize: 12 },
-  light: { color: 'white', fontSize: 12, lineHeight: 20 },
-  link: { color: green, fontSize: 12, paddingVertical: 8 },
-  calendarRow: { flexDirection: 'row', flexWrap: 'nowrap' },
-  today: { borderWidth: 2, borderColor: '#83a26c', borderRadius: 12 },
-  saturday: { color: '#2563eb' },
-  sunday: { color: '#dc2626' },
-  draggingCard: {
-    zIndex: 10,
-    elevation: 8,
-    shadowColor: '#213e32',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-  },
-  cell: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dot: { fontSize: 10, lineHeight: 10, color: green },
-  input: {
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    padding: 12,
-    borderRadius: 11,
-    color: '#213e32',
-  },
-  nav: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: '#dfe5d9',
-    padding: 12,
-    gap: 5,
-  },
-  navItem: {
-    flex: 1,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 8,
-  },
-  toast: {
-    backgroundColor: '#213e32',
-    padding: 14,
-    marginHorizontal: 20,
-    borderRadius: 12,
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: '#18382888',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 440,
-    maxHeight: '95%',
-    flexGrow: 0,
-    alignSelf: 'center',
-    backgroundColor: '#f7f8f3',
-    borderRadius: 24,
-    padding: 26,
-    gap: 22,
-  },
-});
