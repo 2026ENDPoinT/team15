@@ -9,7 +9,9 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "app/**/*.tsx",
@@ -18,8 +20,6 @@
     "shared/**/*.ts",
     "fixtures/**/*.ts",
     "tests/**/*.ts",
-    "expo-env.d.ts",
-    "playwright.config.ts",
-    ".expo/types/**/*.ts"
+    "playwright.config.ts"
   ]
 }
