@@ -814,15 +814,6 @@ export default function CampusApp() {
                 </>
               )}
               <Text style={s.section}>신청·제출 체크리스트</Text>
-              {selectedChecklist?.updatedChecklist && (
-                <Text style={s.reason}>
-                  체크리스트가 변경되었어요. 기존 체크 기록은 유지합니다. 새
-                  목록:{' '}
-                  {selectedChecklist.updatedChecklist
-                    .map(({ text }) => text)
-                    .join(', ')}
-                </Text>
-              )}
 
               {selectedChecklist?.items.length ? (
                 selectedChecklist.items.map((item) => (
