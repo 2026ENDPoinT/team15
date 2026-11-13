@@ -10,10 +10,10 @@ test('시연 새로고침이 관심 공지를 첫 카드와 메인에 표시한�
   await page.goto('/');
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await page.getByRole('radio', { name: '정보통신대학', exact: true }).click();
-  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(
-    page.getByText('설정을 저장했어요. 맞춤 공지에 반영했습니다.'),
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByText('설정이 자동 저장됐어요.')).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await page
     .getByRole('button', { name: '시연 공지 새로고침', exact: true })

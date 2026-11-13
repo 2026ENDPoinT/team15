@@ -277,7 +277,39 @@ export default function CampusApp() {
   const [dept, setDept] = useState(profile.department);
   const [grade, setGrade] = useState(profile.grade);
   const [status, setStatus] = useState(profile.enrollment);
-  const savingProfile = useRef(false);
+  const saveProfileRef = useRef(saveProfile);
+  saveProfileRef.current = saveProfile;
+  const profileWrites = useRef(Promise.resolve());
+  const profileVersion = useRef(0);
+  const lastProfile = useRef(JSON.stringify(profile));
+  const [profileSaveState, setProfileSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const [profileRetry, setProfileRetry] = useState(0);
+  useEffect(() => {
+    const next: CampusProfile = {
+      college,
+      department: dept.trim(),
+      grade,
+      enrollment: status,
+      keywords: draft,
+      customKeywords: customOptions,
+    };
+    const serialized = JSON.stringify(next);
+    if (lastProfile.current === serialized && profileRetry === 0) return;
+    lastProfile.current = serialized;
+    const version = ++profileVersion.current;
+    setProfileSaveState('saving');
+    // Keep rapid edits in order so an older write cannot replace the latest one.
+    profileWrites.current = profileWrites.current
+      .then(() => saveProfileRef.current(next))
+      .then(() => {
+        if (version === profileVersion.current) setProfileSaveState('saved');
+      })
+      .catch(() => {
+        if (version === profileVersion.current) setProfileSaveState('error');
+      });
+  }, [college, dept, grade, status, draft, customOptions, profileRetry]);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -752,6 +784,7 @@ export default function CampusApp() {
                     ...(page === 3
                       ? [
                           draft,
+                          profileSaveState,
                           options,
                           customOptions,
                           deletingKeywords,
@@ -1551,40 +1584,32 @@ export default function CampusApp() {
                                     </View>
                                   </View>
                                 </View>
-                                <Button
-                                  label="설정 저장"
-                                  primary
-                                  onPress={async () => {
-                                    if (savingProfile.current) return;
-                                    if (!draft.length) {
-                                      setMessage(
-                                        '선호 키워드를 하나 이상 선택해주세요.',
-                                      );
-                                      return;
+                                <Text
+                                  accessibilityLiveRegion="polite"
+                                  style={s.muted}
+                                >
+                                  {profileSaveState === 'saving'
+                                    ? '설정 저장 중…'
+                                    : profileSaveState === 'error'
+                                      ? '설정을 저장하지 못했어요. 다시 시도해 주세요.'
+                                      : profileSaveState === 'saved'
+                                        ? '설정이 자동 저장됐어요.'
+                                        : '변경한 설정은 자동으로 저장돼요.'}
+                                </Text>
+                                {!draft.length && (
+                                  <Text style={s.muted}>
+                                    선호 키워드를 선택하면 맞춤 공지를 볼 수
+                                    있어요.
+                                  </Text>
+                                )}
+                                {profileSaveState === 'error' && (
+                                  <Button
+                                    label="설정 저장 다시 시도"
+                                    onPress={() =>
+                                      setProfileRetry((value) => value + 1)
                                     }
-                                    const next: CampusProfile = {
-                                      college,
-                                      department: dept.trim(),
-                                      grade,
-                                      enrollment: status,
-                                      keywords: draft,
-                                      customKeywords: customOptions,
-                                    };
-                                    savingProfile.current = true;
-                                    try {
-                                      await saveProfile(next);
-                                      setMessage(
-                                        '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
-                                      );
-                                    } catch {
-                                      setMessage(
-                                        '설정을 저장하지 못했어요. 다시 시도해 주세요.',
-                                      );
-                                    } finally {
-                                      savingProfile.current = false;
-                                    }
-                                  }}
-                                />
+                                  />
+                                )}
                                 {developerToolsEnabled && (
                                   <Button
                                     label="개발자 도구"

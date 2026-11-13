@@ -54,13 +54,17 @@ test('소속 단과대학과 내 정보 및 키워드가 새로고침 후에도 
   const department = page.getByRole('textbox', { name: '학과', exact: true });
   await settings.click();
   await college.click();
+  await department.fill('전자');
+  await department.fill('전자공학');
   await department.fill('전자공학과');
   await page.getByRole('textbox', { name: '직접 키워드 입력' }).fill('멘토링');
   await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
-  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect(
-    page.getByText('설정을 저장했어요. 맞춤 공지에 반영했습니다.'),
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '설정 저장', exact: true }),
+  ).toHaveCount(0);
   await page.reload();
   await settings.click();
   await expect(college).toBeChecked();
@@ -68,6 +72,9 @@ test('소속 단과대학과 내 정보 및 키워드가 새로고침 후에도 
   await expect(
     page.getByRole('button', { name: '멘토링', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '멘토링', exact: true }),
+  ).toHaveCSS('background-color', 'rgb(40, 99, 77)');
   await college.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('college-profile.png') });
 });

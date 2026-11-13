@@ -94,7 +94,9 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
-  await button('설정 저장').click();
+  await expect(
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
   await openSaved();
   await expect(
     page.getByText('지원 조건 불일치 · 학년 조건이 입력한 프로필과 달라요.', {
@@ -104,7 +106,9 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await expect(checkedItem).toBeChecked();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('3학년').click();
-  await button('설정 저장').click();
+  await expect(
+    page.getByText('설정이 자동 저장됐어요.', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   stage = 'changed';
   failAI = true;
