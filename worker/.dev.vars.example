@@ -1,0 +1,6 @@
+# 실제 값은 worker/.dev.vars에만 작성한다. 이 파일은 예시다.
+GEMINI_API_KEY=""
+# 계정에서 generateContent와 JSON 구조화 출력을 지원하는 모델 ID
+GEMINI_MODEL="gemini-3.5-flash-lite"
+DEMO_TOKEN_SHA256=""
+DEMO_TOKEN_EXPIRES_AT=""
