@@ -128,6 +128,15 @@ export default function DiscoverCard({
       pointerEvents={busy ? 'none' : 'auto'}
       style={[styles.card, { transform: position.getTranslateTransform() }]}
       {...responder.panHandlers}
+      onTouchStart={() => {
+        if (!expanded && !busyRef.current) onDragging(true);
+      }}
+      onTouchEnd={() => {
+        if (!busyRef.current) onDragging(false);
+      }}
+      onTouchCancel={() => {
+        if (!busyRef.current) onDragging(false);
+      }}
     >
       <View testID="discover-card-body" style={styles.bodyContent}>
         <Text style={styles.muted}>{notice.org}</Text>

@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -92,6 +93,7 @@ function SwipeCard({
   actRef.current = act;
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => () => onDragging(false), [onDragging]);
 
   const reset = () => {
     axis.current = null;
@@ -108,9 +110,13 @@ function SwipeCard({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_, g) =>
-          bucket !== 'saved' && (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
+          bucket !== 'saved' &&
+          !expanded &&
+          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
         onMoveShouldSetPanResponder: (_, g) =>
-          bucket !== 'saved' && (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
+          bucket !== 'saved' &&
+          !expanded &&
+          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           position.stopAnimation();
@@ -145,7 +151,7 @@ function SwipeCard({
           reset();
         },
       }),
-    [bucket, position, onDragging],
+    [bucket, expanded, position, onDragging],
   );
 
   return (
@@ -156,6 +162,11 @@ function SwipeCard({
         dragging && s.draggingCard,
       ]}
       {...responder.panHandlers}
+      onTouchStart={() => {
+        if (bucket !== 'saved' && !expanded) onDragging(true);
+      }}
+      onTouchEnd={() => onDragging(false)}
+      onTouchCancel={() => onDragging(false)}
     >
       <View style={s.between}>
         <Text style={s.muted}>{notice.org}</Text>
@@ -258,6 +269,7 @@ export default function CampusApp() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [cardDragging, setCardDragging] = useState(false);
+  const cardTouchLocked = useRef(false);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const [picked, setPicked] = useState<string | null>(null);
@@ -265,6 +277,14 @@ export default function CampusApp() {
   const [message, setMessage] = useState('');
   const [testingNotification, setTestingNotification] = useState(false);
   const scrolls = useRef<(ComponentRef<typeof ScrollView> | null)[]>([]);
+  const onCardDragging = useCallback((locked: boolean) => {
+    cardTouchLocked.current = locked;
+    setCardDragging(locked);
+    // Update native scrolling immediately, before a vertical move can be intercepted.
+    scrolls.current[pageRef.current]?.setNativeProps({
+      scrollEnabled: !locked,
+    });
+  }, []);
   const { width } = useWindowDimensions();
   const pageOffset = useRef(new Animated.Value(-2 * width)).current;
   const transitioning = useRef(false);
@@ -327,7 +347,7 @@ export default function CampusApp() {
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, g) =>
           !transitioning.current &&
-          !cardDragging &&
+          !cardTouchLocked.current &&
           Math.abs(g.dx) > 18 &&
           Math.abs(g.dx) > Math.abs(g.dy) * 1.25,
         onPanResponderGrant: () => {
@@ -721,7 +741,7 @@ export default function CampusApp() {
                       <DiscoverCard
                         key={nextNotice.id}
                         notice={nextNotice}
-                        onDragging={setCardDragging}
+                        onDragging={onCardDragging}
                         act={(action) => act(nextNotice.id, action)}
                         detailContent={renderNoticeDetails(nextNotice)}
                       />
@@ -936,7 +956,7 @@ export default function CampusApp() {
                             key={n.id}
                             notice={n}
                             bucket={bucket}
-                            onDragging={setCardDragging}
+                            onDragging={onCardDragging}
                             act={(action) => act(n.id, action)}
                             detailContent={renderNoticeDetails(n)}
                           />
