@@ -33,11 +33,18 @@ import { analysisAccess } from '../../platform/analysisAccess';
 import { createAnalysisClient } from '../../services/analysisClient';
 import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
 import { toNoticeCard } from './noticeReadModel';
+import {
+  defaultCampusProfile,
+  type CampusProfile,
+} from '../../domain/campusProfile';
 import type { NotificationSnapshot } from './noticeDetailPresentation';
 
 const dataListeners = new Set<() => Promise<void>>();
+<<<<<<< Updated upstream
 let currentKeywords = ['대회', '장학금'];
 let reminderWarning: string | null = null;
+=======
+>>>>>>> Stashed changes
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -136,6 +143,7 @@ async function openDemoRepository() {
           }
         : null;
     await repository.recoverInterruptedAnalysis();
+    let profile = (await repository.getProfile()) ?? defaultCampusProfile;
     const sync = createNoticeSync({
       repository,
       collector: {
@@ -143,7 +151,7 @@ async function openDemoRepository() {
       },
       analyze: createAnalysisClient({ getToken: analysisAccess.getToken }),
       randomUUID,
-      keywords: () => currentKeywords,
+      keywords: () => profile.keywords,
       onDataChange: async () => {
         await Promise.all([...dataListeners].map((listener) => listener()));
       },
@@ -153,6 +161,10 @@ async function openDemoRepository() {
       repository,
       sync,
       actions: createNoticeActions(repository, reconcile),
+      async saveProfile(next: CampusProfile) {
+        await repository.saveProfile(next);
+        profile = next;
+      },
       reservationStatus,
     };
   } catch (error) {
@@ -202,7 +214,11 @@ async function readState(repository: Repository) {
   );
   return {
     home,
+<<<<<<< Updated upstream
     reminderWarning,
+=======
+    profile: (await repository.getProfile()) ?? defaultCampusProfile,
+>>>>>>> Stashed changes
     reminders,
     notificationSnapshot,
     notices: entries
@@ -237,7 +253,7 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   clearAnalysisToken(): Promise<void>;
   refreshNotices(): Promise<void>;
   analyzeNotice(id: string): Promise<void>;
-  setKeywords(keywords: string[]): void;
+  saveProfile(profile: CampusProfile): Promise<void>;
   refreshReminders(): Promise<void>;
   notice: typeof demoNotice;
   testNotification: (() => Promise<boolean>) | null;
@@ -405,8 +421,10 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
         analyzeNotice: async (id) => {
           await (await getRepository()).sync.analyzeNotice(id);
         },
-        setKeywords: (keywords) => {
-          currentKeywords = keywords;
+        saveProfile: async (profile) => {
+          const services = await getRepository();
+          await services.saveProfile(profile);
+          await reloadState(services.repository);
         },
         actions,
         refreshReminders: async () => {
