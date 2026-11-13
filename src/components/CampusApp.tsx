@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import {
   Animated,
   Easing,
+  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -165,12 +166,16 @@ export default function CampusApp() {
   pageRef.current = page;
   const {
     buckets,
+    liveNotices,
+    collectLiveNotices,
     actions,
     details,
     checklists,
     testNotification,
     reservationStatus,
   } = useDemoNotice();
+  const [collecting, setCollecting] = useState(false);
+  const allNotices = [...liveNotices, ...notices];
   const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
   const [keys, setKeys] = useState(['대회', '장학금']);
@@ -283,14 +288,15 @@ export default function CampusApp() {
       )[action] ?? '',
     );
   };
-  const saved = notices.filter((n) => buckets[n.id] === 'saved');
+  const saved = allNotices.filter((n) => buckets[n.id] === 'saved');
   const bucket: Bucket =
     page === 0 ? 'dismissed' : page === 1 ? 'unseen' : 'saved';
-  const visible = notices.filter(
+  const visible = allNotices.filter(
     (n) =>
       buckets[n.id] === bucket &&
       !held.includes(n.id) &&
       (page !== 1 ||
+        n.sourceUrl ||
         keys.some(
           (k) =>
             n.tags.includes(k) || n.title.includes(k) || n.summary.includes(k),
@@ -673,6 +679,29 @@ export default function CampusApp() {
                 )}
               </>
             )}
+            {page === 1 && (
+              <Button
+                label={collecting ? '공지 불러오는 중…' : '실제 공지 불러오기'}
+                onPress={async () => {
+                  if (collecting) return;
+                  setCollecting(true);
+                  try {
+                    const { count, incomplete } = await collectLiveNotices();
+                    setMessage(
+                      count
+                        ? `실제 공지 ${count}건을 불러왔어요.${incomplete ? ' 일부 공지는 불러오지 못했어요.' : ''}`
+                        : '새로 불러온 공지가 없어요. 잠시 뒤 다시 시도해 주세요.',
+                    );
+                  } catch {
+                    setMessage(
+                      '공지를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.',
+                    );
+                  } finally {
+                    setCollecting(false);
+                  }
+                }}
+              />
+            )}
             {__DEV__ && page === 1 && (
               <Button
                 label="T02 수집 검증 열기"
@@ -680,8 +709,7 @@ export default function CampusApp() {
               />
             )}
             <Text style={s.muted}>
-              가상 예시 공지입니다. 공지 선택과 준비물 체크는 이 기기에
-              저장됩니다.
+              공지 선택과 준비물 체크는 이 기기에 저장됩니다.
             </Text>
           </ScrollView>
         </Animated.View>
@@ -729,9 +757,19 @@ export default function CampusApp() {
             <Text style={s.section}>{detail?.title ?? '모아 사용 방법'}</Text>
             <Text style={s.description}>
               {detail
-                ? `${detail.org}\n\n${detail.summary}\n\n${detail.date ? `${detail.date} ${detail.time} KST` : '일정 미정 · 원문 확인 필요'}\n\n가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.`
+                ? `${detail.org}\n\n${detail.summary}\n\n${detail.date ? `${detail.date} ${detail.time} KST` : '일정 미정 · 원문 확인 필요'}${detail.sourceUrl ? '' : '\n\n가상 예시 공지입니다.'}`
                 : '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 다른 화면에 갔다 돌아오면 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'}
             </Text>
+            {detail?.sourceUrl && (
+              <Button
+                label="공지 원문 열기"
+                onPress={() => {
+                  const url = detail.sourceUrl;
+                  if (url)
+                    void Linking.openURL(url).catch(() => setDetailError(true));
+                }}
+              />
+            )}
             {detail && selectedDetail?.disposition === 'saved' && (
               <>
                 <Text style={s.section}>준비물</Text>

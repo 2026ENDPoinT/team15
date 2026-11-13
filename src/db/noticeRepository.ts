@@ -53,6 +53,7 @@ export interface NoticeRepository {
   getHomeModel(
     now?: Date,
   ): Promise<{ notices: SavedNoticeWithAnalysis[]; schedule: ScheduleEntry[] }>;
+  listNoticeIds(): Promise<string[]>;
   getNoticeDetail(noticeId: string): Promise<NoticeDetail | null>;
   acknowledgeDeadlineChange(noticeId: string): Promise<void>;
   listReminders(): Promise<ReminderRecord[]>;
@@ -445,6 +446,15 @@ export async function createNoticeRepository(
             (a.time ?? '').localeCompare(b.time ?? ''),
         );
         return { notices, schedule };
+      });
+    },
+
+    listNoticeIds() {
+      return enqueue(async () => {
+        const rows = await db.getAllAsync<{ id: string }>(
+          'SELECT id FROM notices ORDER BY published_date DESC, id',
+        );
+        return rows.map(({ id }) => id);
       });
     },
 

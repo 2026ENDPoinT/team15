@@ -23,6 +23,9 @@ import {
   scheduleTestNotification,
 } from '../../platform/deadlineNotifications';
 import { reminderFireAt } from '../../domain/dates';
+import { collectBoards } from '../../sources/collector';
+import { sha256 } from '../../platform/sha256';
+import { boardConfigs } from '../../sources/boards';
 import { demoNotice } from './demoNotice';
 import { notices } from './campusNotices';
 import { collectedNoticeSchema } from '../../../shared/contracts';
@@ -134,13 +137,38 @@ async function readState(repository: Repository) {
   const home = await repository.getHomeModel();
   const checklist = await repository.getChecklist(demoNotice.id);
   const entries = await Promise.all(
-    notices.map(async ({ id }) => ({
+    (await repository.listNoticeIds()).map(async (id) => ({
       id,
       detail: await repository.getNoticeDetail(id),
       checklist: await repository.getChecklist(id),
     })),
   );
+  const demoIds = new Set(notices.map(({ id }) => id));
+  const liveNotices = entries.flatMap(({ detail }) => {
+    if (!detail || demoIds.has(detail.id)) return [];
+    const analysis = detail.analysisFresh ? detail.analysis?.data : undefined;
+    const deadline = analysis?.events.find(
+      (event) =>
+        event.type === 'application_close' && event.status === 'resolved',
+    );
+    return [
+      {
+        id: detail.id,
+        sourceUrl: detail.sourceUrl,
+        title: detail.title,
+        org: boardConfigs[detail.sourceId].label,
+        tags: analysis?.tags ?? [],
+        date: deadline?.date ?? null,
+        time: deadline?.time ?? null,
+        summary:
+          analysis?.summary ??
+          (detail.raw.bodyText.slice(0, 180) ||
+            '원문에서 내용을 확인해 주세요.'),
+      },
+    ];
+  });
   return {
+    liveNotices,
     home,
     checklist,
     saved: home.notices.some(({ id }) => id === demoNotice.id),
@@ -156,6 +184,7 @@ async function readState(repository: Repository) {
 
 type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   notice: typeof demoNotice;
+  collectLiveNotices(): Promise<{ count: number; incomplete: boolean }>;
   testNotification: (() => Promise<boolean>) | null;
   reservationStatus: ((enable: boolean) => Promise<number>) | null;
   actions: Pick<
@@ -252,6 +281,22 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
         notice: demoNotice,
         ...state,
         actions,
+        collectLiveNotices: async () => {
+          const results = await collectBoards(
+            { sha256 },
+            { maxPages: 1, maxNotices: 5 },
+          );
+          const { repository, actions } = await getRepository();
+          const collected = results.flatMap((result) => result.notices);
+          for (const notice of collected)
+            await repository.upsertRawNotice(notice);
+          setState(await readState(repository));
+          void actions.reconcileReminders().catch(() => undefined);
+          return {
+            count: collected.length,
+            incomplete: results.some((result) => result.status !== 'success'),
+          };
+        },
         reservationStatus: deadlineNotifications
           ? async (enable) => {
               const { reservationStatus } = await getRepository();
