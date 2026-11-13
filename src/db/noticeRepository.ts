@@ -41,6 +41,7 @@ export interface NoticeRepository {
   applyAnalysis(analysis: AnalysisEnvelope): Promise<boolean>;
   saveNotice(noticeId: string): Promise<void>;
   dismissNotice(noticeId: string): Promise<void>;
+  restoreNotice(noticeId: string): Promise<void>;
   unsaveNotice(noticeId: string): Promise<void>;
   setProgress(noticeId: string, progress: Progress): Promise<void>;
   setChecklistCompleted(itemId: string, completed: boolean): Promise<void>;
@@ -334,6 +335,16 @@ export async function createNoticeRepository(
            ON CONFLICT(notice_id) DO UPDATE SET disposition = 'dismissed',
              updated_at = excluded.updated_at WHERE user_notices.disposition = 'unseen'`,
           [noticeId, new Date().toISOString()],
+        );
+      });
+    },
+
+    restoreNotice(noticeId) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `UPDATE user_notices SET disposition = 'unseen', updated_at = ?
+           WHERE notice_id = ? AND disposition = 'dismissed'`,
+          [new Date().toISOString(), noticeId],
         );
       });
     },

@@ -47,6 +47,24 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .first()
     .click();
+  await page
+    .getByRole('button', { name: '체크하기 · 참가 신청서 준비' })
+    .click();
+  await expect(
+    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '준비 중으로 변경' }).click();
+  await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
+  await page.reload();
+  await expect(scholarship).toBeVisible();
+  await page
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+  ).toBeVisible();
+  await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await page.getByRole('button', { name: '대회', exact: true }).click();
