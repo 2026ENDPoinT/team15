@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
@@ -23,14 +24,18 @@ import {
   scheduleTestNotification,
 } from '../../platform/deadlineNotifications';
 import { reminderFireAt } from '../../domain/dates';
-import { collectBoards } from '../../sources/collector';
-import { sha256 } from '../../platform/sha256';
-import { boardConfigs } from '../../sources/boards';
 import { demoNotice } from './demoNotice';
 import { notices } from './campusNotices';
 import { collectedNoticeSchema } from '../../../shared/contracts';
 import { hashNoticeContent } from '../../../shared/canonicalize';
 import { toAnalyzeNoticeRequest } from '../../../shared/mappers';
+import { analysisAccess } from '../../platform/analysisAccess';
+import { createAnalysisClient } from '../../services/analysisClient';
+import { createNoticeSync, type SyncStatus } from '../../services/noticeSync';
+import { toNoticeCard } from './noticeReadModel';
+
+const dataListeners = new Set<() => Promise<void>>();
+let currentKeywords = ['대회', '장학금'];
 
 async function openDemoRepository() {
   const db = await openDatabaseAsync('campus-notices.db');
@@ -112,8 +117,23 @@ async function openDemoRepository() {
               .length;
           }
         : null;
+    await repository.recoverInterruptedAnalysis();
+    const sync = createNoticeSync({
+      repository,
+      collector: {
+        sha256: (text) => digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+      },
+      analyze: createAnalysisClient({ getToken: analysisAccess.getToken }),
+      randomUUID,
+      keywords: () => currentKeywords,
+      onDataChange: async () => {
+        await Promise.all([...dataListeners].map((listener) => listener()));
+      },
+      reconcileReminders: reconcile ?? (async () => {}),
+    });
     return {
       repository,
+      sync,
       actions: createNoticeActions(repository, reconcile),
       reservationStatus,
     };
@@ -136,40 +156,30 @@ function getRepository() {
 async function readState(repository: Repository) {
   const home = await repository.getHomeModel();
   const checklist = await repository.getChecklist(demoNotice.id);
+  const records = await repository.listNoticeRecords();
   const entries = await Promise.all(
-    (await repository.listNoticeIds()).map(async (id) => ({
-      id,
-      detail: await repository.getNoticeDetail(id),
-      checklist: await repository.getChecklist(id),
+    records.map(async (record) => ({
+      id: record.notice.id,
+      record,
+      detail: await repository.getNoticeDetail(record.notice.id),
+      checklist: await repository.getChecklist(record.notice.id),
     })),
   );
-  const demoIds = new Set(notices.map(({ id }) => id));
-  const liveNotices = entries.flatMap(({ detail }) => {
-    if (!detail || demoIds.has(detail.id)) return [];
-    const analysis = detail.analysisFresh ? detail.analysis?.data : undefined;
-    const deadline = analysis?.events.find(
-      (event) =>
-        event.type === 'application_close' && event.status === 'resolved',
-    );
-    return [
-      {
-        id: detail.id,
-        sourceUrl: detail.sourceUrl,
-        title: detail.title,
-        org: boardConfigs[detail.sourceId].label,
-        tags: analysis?.tags ?? [],
-        date: deadline?.date ?? null,
-        time: deadline?.time ?? null,
-        summary:
-          analysis?.summary ??
-          (detail.raw.bodyText.slice(0, 180) ||
-            '원문에서 내용을 확인해 주세요.'),
-      },
-    ];
-  });
   return {
-    liveNotices,
     home,
+    notices: entries
+      .flatMap(({ record, detail }) =>
+        detail ? [toNoticeCard(record, detail)] : [],
+      )
+      .sort(
+        (a, b) =>
+          Number(!!a.synthetic) - Number(!!b.synthetic) ||
+          (a.synthetic
+            ? notices.findIndex(({ id }) => id === a.id) -
+              notices.findIndex(({ id }) => id === b.id)
+            : 0),
+      ),
+    syncState: await repository.getSyncState(),
     checklist,
     saved: home.notices.some(({ id }) => id === demoNotice.id),
     buckets: Object.fromEntries(
@@ -183,8 +193,14 @@ async function readState(repository: Repository) {
 }
 
 type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
+  syncStatus: SyncStatus;
+  hasAnalysisAccess: boolean;
+  saveAnalysisToken(token: string): Promise<void>;
+  clearAnalysisToken(): Promise<void>;
+  refreshNotices(): Promise<void>;
+  analyzeNotice(id: string): Promise<void>;
+  setKeywords(keywords: string[]): void;
   notice: typeof demoNotice;
-  collectLiveNotices(): Promise<{ count: number; incomplete: boolean }>;
   testNotification: (() => Promise<boolean>) | null;
   reservationStatus: ((enable: boolean) => Promise<number>) | null;
   actions: Pick<
@@ -203,23 +219,61 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<Awaited<ReturnType<typeof readState>>>();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [hasAnalysisAccess, setHasAnalysisAccess] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    phase: 'idle',
+    message: null,
+    analysisRetryAt: null,
+  });
+  const loadVersion = useRef(0);
+  async function reloadState(repository: Repository) {
+    const version = ++loadVersion.current;
+    const result = await readState(repository);
+    if (version === loadVersion.current) setState(result);
+  }
   useEffect(() => {
     let active = true;
+    let unsubscribe: (() => void) | undefined;
+    async function reload() {
+      const { repository } = await getRepository();
+      if (active) await reloadState(repository);
+    }
+    dataListeners.add(reload);
     function reconcile() {
       void getRepository()
         .then(({ actions }) => actions.reconcileReminders())
         .catch(() => undefined);
     }
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') reconcile();
+      if (state === 'active') {
+        reconcile();
+        void getRepository()
+          .then(({ sync }) => sync.refreshNotices('foreground'))
+          .catch(() => undefined);
+      }
     });
     void getRepository()
-      .then(({ repository }) => readState(repository))
+      .then(async ({ repository, sync }) => {
+        if (active) {
+          unsubscribe = sync.subscribe(() => {
+            if (active) setSyncStatus(sync.getStatus());
+          });
+        }
+        try {
+          if (active) setHasAnalysisAccess(!!(await analysisAccess.getToken()));
+        } catch {
+          /* Settings can retry secure access. */
+        }
+        return readState(repository);
+      })
       .then(
         (result) => {
           if (active) {
             setState(result);
             reconcile();
+            void getRepository().then(({ sync }) =>
+              sync.refreshNotices('launch'),
+            );
           }
         },
         () => {
@@ -228,6 +282,9 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       );
     return () => {
       active = false;
+      loadVersion.current++;
+      dataListeners.delete(reload);
+      unsubscribe?.();
       subscription.remove();
     };
   }, [attempt]);
@@ -261,11 +318,16 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   ) {
     const { repository, actions } = await getRepository();
     await write(actions, repository);
-    setState(await readState(repository));
+    await reloadState(repository);
   }
 
   const actions: DemoNoticeState['actions'] = {
-    saveNotice: (id) => update((actions) => actions.saveNotice(id)),
+    saveNotice: async (id) => {
+      await update((actions) => actions.saveNotice(id));
+      void getRepository()
+        .then(({ sync }) => sync.analyzeNotice(id))
+        .catch(() => undefined);
+    },
     unsaveNotice: (id) => update((actions) => actions.unsaveNotice(id)),
     dismissNotice: (id) => update((actions) => actions.dismissNotice(id)),
     restoreNotice: (id) =>
@@ -280,23 +342,28 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       value={{
         notice: demoNotice,
         ...state,
-        actions,
-        collectLiveNotices: async () => {
-          const results = await collectBoards(
-            { sha256 },
-            { maxPages: 1, maxNotices: 5 },
-          );
-          const { repository, actions } = await getRepository();
-          const collected = results.flatMap((result) => result.notices);
-          for (const notice of collected)
-            await repository.upsertRawNotice(notice);
-          setState(await readState(repository));
-          void actions.reconcileReminders().catch(() => undefined);
-          return {
-            count: collected.length,
-            incomplete: results.some((result) => result.status !== 'success'),
-          };
+        syncStatus,
+        hasAnalysisAccess,
+        saveAnalysisToken: async (token) => {
+          await analysisAccess.setToken(token);
+          (await getRepository()).sync.resetAccess();
+          setHasAnalysisAccess(true);
         },
+        clearAnalysisToken: async () => {
+          await analysisAccess.clearToken();
+          (await getRepository()).sync.resetAccess();
+          setHasAnalysisAccess(false);
+        },
+        refreshNotices: async () => {
+          await (await getRepository()).sync.refreshNotices('manual');
+        },
+        analyzeNotice: async (id) => {
+          await (await getRepository()).sync.analyzeNotice(id);
+        },
+        setKeywords: (keywords) => {
+          currentKeywords = keywords;
+        },
+        actions,
         reservationStatus: deadlineNotifications
           ? async (enable) => {
               const { reservationStatus } = await getRepository();

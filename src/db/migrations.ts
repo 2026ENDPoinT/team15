@@ -73,3 +73,12 @@ export const migration1 = `
     detail_failures INTEGER NOT NULL DEFAULT 0
   );
 `;
+
+export const migration2 = `
+  ALTER TABLE notices ADD COLUMN analysis_request_id TEXT;
+  CREATE TABLE sync_control (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    analysis_retry_at TEXT
+  );
+  INSERT INTO sync_control (id) VALUES (1);
+`;

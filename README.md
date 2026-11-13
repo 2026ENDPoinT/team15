@@ -6,7 +6,7 @@ ENDPoinT 해커톤 2026 Team 15
 
 ## 1 현재 구현 범위
 
-main의 네 화면 UI(휴지통·맞춤 공지·메인·설정), SQLite repository와 T02의 두 게시판 수집 어댑터를 포함한다. 가상 공지 5건의 저장·휴지통·신청 상태·체크 기록은 SQLite에 연결되어 있다. Android 알림 예약·취소와 기기 검증용 동작도 구현되어 있다. 실제 수집은 별도의 개발 검증 화면과 CLI에서 실행한다. **T02 수집의 Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. 새 UI·SQLite·알림 병합 후 실기기 검증은 별도로 필요하다. **T05 AI Worker의 실제 Gemini 호출·Cloudflare 배포·두 본문 원문 대조를 완료**했다. 실제 공지 수집·AI 분석을 제품 화면과 연결하는 작업은 T07 범위다.
+main의 네 화면 UI(휴지통·맞춤 공지·메인·설정), SQLite repository와 T02의 두 게시판 수집 어댑터를 포함한다. 가상 공지 5건의 저장·휴지통·신청 상태·체크 기록은 SQLite에 연결되어 있다. Android 알림 예약·취소와 기기 검증용 동작도 구현되어 있다. 실제 수집·AI 분석은 맞춤 공지의 새로고침과 상세 화면에서 실행하며, 가상 예시는 카드에 구분해 표시한다. **T02 수집의 Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. 새 UI·SQLite·SecureStore 통합 이후의 실기기 체크리스트는 2026-11-14 사용자 전체 통과 보고로 확인했다. **T05 AI Worker의 실제 Gemini 호출·Cloudflare 배포·두 본문 원문 대조를 완료**했다. T07 C의 수집·AI 클라이언트·동기화·DB·제품 화면 연결과 실제 두 공지의 Node SQLite 재실행 검증을 완료했다. Android의 저장·토큰 재실행 보존, 오프라인 복구와 가상 공지 알림 예약·취소까지 사용자 확인을 받아 T07 C 담당을 완료했다. [T07 인계 문서](docs/campus_notice_t07_handoff.md)를 참고한다.
 
 | 경로                     | 내용                                               |
 | ------------------------ | -------------------------------------------------- |
@@ -79,7 +79,7 @@ npm run collect:smoke
 
 ## 3 설정과 비밀 정보
 
-자동 테스트에는 API 키나 계정이 필요 없다. 실제 AI 호출은 Worker 비밀 설정의 Gemini 키를 사용한다. 로컬 CLI의 시연 토큰은 `.env.worker-client`에 보관하고 서버에는 해시와 만료만 전달한다. 기기의 SecureStore·접근 설정 UI 연결은 T07 범위다. `.env`·`.dev.vars`의 실제 값은 커밋하지 않는다.
+자동 테스트에는 API 키나 계정이 필요 없다. 실제 AI 호출은 Worker 비밀 설정의 Gemini 키를 사용한다. 로컬 CLI의 시연 토큰은 `.env.worker-client`에 보관하고 서버에는 해시와 만료만 전달한다. 기기에서는 설정의 AI 시연 토큰 입력을 통해 SecureStore에 저장한다. 웹 검증의 토큰은 메모리에만 유지하며 새로고침하면 사라진다. `.env`·`.dev.vars`의 실제 값은 커밋하지 않는다.
 
 ## 4 T05 AI Worker 시작하기
 
@@ -141,3 +141,23 @@ Worker 실행은 `placement.region=gcp:asia-northeast3`로 서울 인근에 배�
 시연을 중지하려면 `worker/wrangler.jsonc`의 `ANALYSIS_ENABLED`를 `"false"`로 바꾸고 다시 배포한다. 토큰이 만료되면 새 만료 시각을 로컬 비밀 파일에 지정하고 `worker:secrets`로 반영한다. 토큰 교체는 클라이언트 원문 토큰과 서버 SHA-256 해시를 함께 바꾼다. 토큰당 60초 10회 제한은 위치별 근사 제한이며 전역 비용 상한이 아니다. [Cloudflare 호출 제한](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
 
 [T05 인계 문서](docs/campus_notice_t05_handoff.md)에 구현 경계·검증 증거·남은 완료 조건을 정리했다.
+
+## 5 T07 실제 공지 연결
+
+```sh
+nvm use
+npm ci
+npm run start -- --clear
+```
+
+앱의 **설정 → AI 분석 설정**에서 팀의 기존 시연 토큰을 입력한다. **맞춤 공지 → 실제 공지 새로고침 → 전체 공지 보기**에서 실제 공지를 확인하고, 상세를 열거나 관심 저장하면 분석을 요청한다. 확정된 최신 일정만 메인 캘린더와 알림에 반영한다. 분석 전에도 원문 열기·관심 저장이 가능하다. 가상 공지는 카드에 표시한다.
+
+첫 수동 갱신 이후 앱 시작·포그라운드 복귀 시 30분 기준으로 갱신한다. 수동 갱신 간격은 30초이며 AI는 동시 1건·자동 갱신당 최대 10건이다. 429 대기 시각은 재실행 후에도 유지한다. 프로필·키워드는 아직 메모리 설정이다. 웹의 실제 게시판 fetch는 CORS로 실패할 수 있으므로 기기에서 확인한다.
+
+실제 게시판·배포 Worker·SQLite 파일 재개방 검증(기존 `.env.worker-client` 설정 필요, AI 2회):
+
+```sh
+npm run sync:smoke
+```
+
+공개 결과는 `dist/t07-smoke/latest.json`, 실행별 SQLite와 보고서는 `dist/t07-smoke/<실행시각>/`에 저장한다. 일반 검증은 `npm run check`, 화면 검증은 `npm run test:e2e`, Android 번들 생성은 `npm run build:android`다. [T07 인계 문서](docs/campus_notice_t07_handoff.md)에 repository 추가 메서드·설계 조정·실제 증거·사용자 확인에 따른 실기기 완료 기록을 정리했다.
