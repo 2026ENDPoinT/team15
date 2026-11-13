@@ -30,7 +30,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
               size={size}
-              color={color}
+              style={{ color }}
             />
           ),
         }}
@@ -41,7 +41,7 @@ export default function TabLayout() {
           title: '공지 찾기',
           tabBarAccessibilityLabel: '공지 찾기',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" size={size} color={color} />
+            <Ionicons name="search-outline" size={size} style={{ color }} />
           ),
         }}
       />
