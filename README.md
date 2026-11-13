@@ -65,11 +65,16 @@ npm run build:android
 npm run build:web
 npx playwright install chromium
 npm run test:e2e
+npm run test:e2e:release
 ```
 
 `build:android`는 Android용 Metro/Hermes 번들만 생성하며 **설치 가능한 APK를 만들지 않는다**. Expo Go 실행과 독립 APK 제출은 구분한다. 웹 테스트도 실기기 확인을 대신하지 않는다. 출력은 `dist/`, UI 테스트 결과는 `test-results/`에 저장한다. Worker 실행·배포는 4절을 따른다.
 
-T09 변경·실패·알림 재조정은 `npm run test:t09`로 검증한다. 실제 정상 공지 후보 수집은 `npm run t09:candidates`, 선정 공지의 배포 AI 1회·SQLite 검증은 `npm run t09:live-smoke`를 사용한다. Android에서는 개발 앱의 **맞춤 공지 → T09 변경·알림 검증 열기**로 가상 변경·실패와 실제 OS 예약을 확인한다. [T09 검증 기록과 기기 인수 절차](docs/campus_notice_t09_handoff.md)를 따른다.
+일반 알림 권한은 **설정 → 마감 알림 → 마감 알림 허용**에서 요청한다. 허용 후 저장된 실제 공지의 마감 예약을 갱신하며, 권한 거절 시 **기기 알림 설정 열기**로 다시 허용할 수 있다. 웹에서는 지원하지 않는다는 안내만 표시한다.
+
+검증 화면과 테스트 알림은 **설정 → 개발자 도구**에 모았다. 개발 실행(`__DEV__`)에서 사용할 수 있으며, 기본 배포 번들은 메뉴를 숨기고 `/dev`, `/dev/collection`, `/dev/t09` 접근을 메인으로 돌려보낸다. `EXPO_PUBLIC_ENABLE_DEV_TOOLS=1`은 검증용 export에만 사용하는 공개 빌드 플래그이며 비밀 값이 아니다. `npm run test:e2e`는 이 플래그를 켜서 기존 수집 화면까지 검사하고, `npm run test:e2e:release`는 끈 상태로 다시 빌드해 일반 화면과 직접 주소 접근 차단을 검사한다. 배포 번들 생성 시 이 플래그를 설정하지 않는다. 자동 테스트·CLI 스크립트·fixture·기존 기기 검증 기록은 유지한다.
+
+T09 변경·실패·알림 재조정은 `npm run test:t09`로 검증한다. 실제 정상 공지 후보 수집은 `npm run t09:candidates`, 선정 공지의 배포 AI 1회·SQLite 검증은 `npm run t09:live-smoke`를 사용한다. Android에서는 개발 앱의 **설정 → 개발자 도구 → T09 변경·알림 검증 열기**로 가상 변경·실패와 실제 OS 예약을 확인한다. [T09 검증 기록과 기기 인수 절차](docs/campus_notice_t09_handoff.md)를 따른다.
 
 T02의 실제 서버 수집 확인(두 게시판 각각 목록 1·2페이지와 상세 1건, 네트워크 필요):
 
@@ -77,7 +82,7 @@ T02의 실제 서버 수집 확인(두 게시판 각각 목록 1·2페이지와 
 npm run collect:smoke
 ```
 
-기기에서는 `npm run start`로 실행하고 **맞춤 공지 → T02 수집 검증 열기 → 두 게시판 수집 확인**을 누른다. 진입 버튼은 개발 모드에만 표시한다. 검증 화면은 `/dev/collection`이며 결과를 DB에 저장하지 않는다. 웹 통합 테스트는 실제 HTML fixture를 네트워크 응답으로 주입하므로 Android fetch·TLS·네이티브 해시 검증을 대신하지 않는다.
+기기에서는 `npm run start`로 실행하고 **설정 → 개발자 도구 → T02 수집 검증 열기 → 두 게시판 수집 확인**을 누른다. 진입 버튼은 개발 모드에만 표시한다. 검증 화면은 `/dev/collection`이며 결과를 DB에 저장하지 않는다. 웹 통합 테스트는 실제 HTML fixture를 네트워크 응답으로 주입하므로 Android fetch·TLS·네이티브 해시 검증을 대신하지 않는다.
 
 ## 3 설정과 비밀 정보
 

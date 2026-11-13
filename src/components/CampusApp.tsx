@@ -51,6 +51,8 @@ import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
 import { AnalysisSettings } from './AnalysisSettings';
+import { NotificationSettings } from './NotificationSettings';
+import { developerToolsEnabled } from '../features/verification/developerTools';
 import {
   detailReviewNotes,
   detailEventLabel,
@@ -238,8 +240,6 @@ export default function CampusApp() {
     actions,
     details,
     checklists,
-    testNotification,
-    reservationStatus,
     reminders,
     notificationSnapshot,
     refreshReminders,
@@ -293,7 +293,6 @@ export default function CampusApp() {
   const [picked, setPicked] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const [message, setMessage] = useState('');
-  const [testingNotification, setTestingNotification] = useState(false);
   const scrolls = useRef<(ComponentRef<typeof ScrollView> | null)[]>([]);
   const onCardDragging = useCallback((locked: boolean) => {
     cardTouchLocked.current = locked;
@@ -694,7 +693,8 @@ export default function CampusApp() {
                   )}
                 </Text>
                 <Text style={s.muted}>
-                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요.
+                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
+                  상태이거나 예약 시각이 지났다면 예약하지 않아요.
                 </Text>
                 <Button
                   label="알림 상태 다시 확인"
@@ -764,9 +764,6 @@ export default function CampusApp() {
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
-                          testingNotification,
-                          reservationStatus,
-                          testNotification,
                         ]
                       : [
                           notices,
@@ -1035,19 +1032,6 @@ export default function CampusApp() {
                                   KST
                                 </Text>
                               )}
-                            {__DEV__ && (
-                              <>
-                                <Button
-                                  label="T02 수집 검증 열기"
-                                  onPress={() => router.push('/dev/collection')}
-                                />
-                                <Button
-                                  label="T09 변경·알림 검증 열기"
-                                  onPress={() => router.push('/dev/t09')}
-                                />
-                              </>
-                            )}
-
                             {nextNotice ? (
                               <DiscoverCard
                                 key={nextNotice.id}
@@ -1364,6 +1348,7 @@ export default function CampusApp() {
                             ) : (
                               <>
                                 <AnalysisSettings />
+                                <NotificationSettings />
                                 <View style={s.card}>
                                   <Text style={s.section}>내 정보</Text>
                                   <Text style={s.muted}>소속 단과대학</Text>
@@ -1600,76 +1585,11 @@ export default function CampusApp() {
                                     }
                                   }}
                                 />
-                                {testNotification && (
+                                {developerToolsEnabled && (
                                   <Button
-                                    label={
-                                      testingNotification
-                                        ? '알림 예약 중…'
-                                        : '10초 뒤 테스트 알림'
-                                    }
-                                    onPress={async () => {
-                                      if (testingNotification) return;
-                                      setTestingNotification(true);
-                                      try {
-                                        const scheduled =
-                                          await testNotification();
-                                        setMessage(
-                                          scheduled
-                                            ? '테스트 알림을 예약했어요.'
-                                            : '기기 설정에서 알림을 허용해 주세요.',
-                                        );
-                                      } catch (error) {
-                                        setMessage(
-                                          error instanceof Error
-                                            ? error.message
-                                            : '테스트 알림을 예약하지 못했어요.',
-                                        );
-                                      } finally {
-                                        setTestingNotification(false);
-                                      }
-                                    }}
+                                    label="개발자 도구"
+                                    onPress={() => router.push('/dev')}
                                   />
-                                )}
-                                {reservationStatus && (
-                                  <View style={s.card}>
-                                    <Text style={s.section}>
-                                      가상 공지 마감 알림 검증
-                                    </Text>
-                                    <Text style={s.muted}>
-                                      해커톤 공지를 선택하고 신청 상태를 준비
-                                      중으로 바꾼 뒤 예약하세요. 테스트 알림은
-                                      5분 뒤에 예정돼요.
-                                    </Text>
-                                    {([true, false] as const).map((enable) => (
-                                      <Button
-                                        key={String(enable)}
-                                        label={
-                                          enable
-                                            ? '가상 마감 알림 예약'
-                                            : '가상 마감 예약 수 확인'
-                                        }
-                                        onPress={async () => {
-                                          if (testingNotification) return;
-                                          setTestingNotification(true);
-                                          try {
-                                            const count =
-                                              await reservationStatus(enable);
-                                            setMessage(
-                                              `기기에 남은 가상 마감 예약 · ${count}건`,
-                                            );
-                                          } catch (error) {
-                                            setMessage(
-                                              error instanceof Error
-                                                ? error.message
-                                                : '예약을 확인하지 못했어요.',
-                                            );
-                                          } finally {
-                                            setTestingNotification(false);
-                                          }
-                                        }}
-                                      />
-                                    ))}
-                                  </View>
                                 )}
                               </>
                             )}
