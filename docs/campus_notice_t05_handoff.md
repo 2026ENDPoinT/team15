@@ -125,3 +125,17 @@ Node 24.22.3에서 `npm run check`의 타입 검사·자동 테스트 114건·�
 버전만 넣은 불완전한 요청으로 배포 전 e2의 409를 확인했고, 배포 후 e2는 400 `INVALID_INPUT`(버전 검사 통과), e1은 409를 반환했다. 이어서 `npm run worker:smoke`로 캡처된 실제 공지 두 건을 배포 서버에서 분석해 e2 응답·해시·계약 검증을 통과했다. [배포 응답과 버전 검증 기록](../fixtures/real/worker/e2_deployed_verified.json)에 보관했다.
 
 앱에서 이미 409를 받았다면 메모리의 분석 중지 상태를 해제해야 한다. **앱을 완전히 종료 → 재실행 → 맞춤 공지 → 남은 공지 분석** 순서로 복구한다. 기존 e2 앱의 재빌드나 토큰 재발급은 필요 없다. 앞으로 오류 문구도 사용자 설정 문제가 아닌 앱·서버 버전 불일치를 안내하도록 수정했다. 변경한 클라이언트의 테스트 4건과 포맷 검사를 통과했다. 이번 배포 검증을 Android 실기기 확인으로 해석하지 않는다.
+
+## 9 공용 분석 캐시 (2026-11-14, 운영 미배포)
+
+`AnalysisCache` SQLite Durable Object를 추가했다. 전체 검증 입력·모델·시스템 프롬프트·모델 출력 스키마의 해시로 객체를 지정하므로 게시일 변경도 구분한다. 성공한 분석 봉투만 7일간 보존하고 원래 `analyzed_at`을 반환한다. 만료 검사는 읽을 때 수행하며 alarm으로 오래된 저장 데이터를 삭제한다. 오류는 캐시하지 않고, 저장소 장애 시에는 중복 Gemini 호출로 우회하지 않는다. 입력 본문·접근 토큰·Gemini 키는 저장하지 않는다.
+
+같은 객체의 진행 중 Promise를 공유하여 여러 기기의 동시 요청을 합친다. 캐시 적중과 공유 요청에는 모델 호출 제한을 부과하지 않고, 새 분석에만 기존 토큰별 10회/60초 근사 제한을 적용한다. 인증·만료·입력 크기·버전·해시 검사는 캐시 조회 전에 실행한다. 제한은 서로 다른 공지 전체에 대한 엄격한 전역 RPM 보장이 아니다. `worker:access-smoke`는 이제 401·400만 확인하며 429를 만들기 위한 무효 입력 반복을 제거했다.
+
+Wrangler에 바인딩과 `v1-analysis-cache` SQLite migration을 추가했으며 별도 저장소 생성 명령은 없다. 운영 반영 명령은 `npm run worker:deploy`다. Durable Object는 Worker placement와 별도 위치에서 실행하므로 EU jurisdiction으로 제한한다. 기존 서울 Worker 배포에서의 실제 Gemini 증거는 새 객체 실행 위치의 증거가 아니며 배포 후 재확인이 필요하다. [Cloudflare 위치 제약](https://developers.cloudflare.com/durable-objects/reference/data-location/), [SQLite 저장 API](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
+
+자동 검증은 키 변경, 동시 요청 합치기, 객체 재생성 후 저장 결과 재사용, TTL과 정리, 실패 후 재시도, 실제 workerd의 인증·캐시 적중·동시 요청·호출 제한을 포함한다. Gemini는 mock이며 운영 배포나 Android 실기기 검증을 뜻하지 않는다. 앱의 요청·응답 계약과 UI는 변경하지 않았다.
+
+로컬 workerd는 jurisdiction을 지원하지 않아 테스트와 `.dev.vars`에서 `ANALYSIS_CACHE_JURISDICTION=local`을 사용한다. 운영 설정은 `eu`이며 이 값이 없을 때도 EU가 기본이다. 로컬 검증은 실제 EU 실행 위치를 검증하지 않는다.
+
+Node 24.22.3에서 `npm run check`의 타입 검사·자동 테스트 135건·포맷 검사를 통과했고 `npm run worker:build` dry-run에서 Durable Object 바인딩과 migration 구성을 확인했다. 실제 Gemini 호출과 운영 배포는 수행하지 않았다.
