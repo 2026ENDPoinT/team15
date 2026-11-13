@@ -9,6 +9,7 @@ export function createNoticeActions(
   | 'saveNotice'
   | 'dismissNotice'
   | 'unsaveNotice'
+  | 'setNoticeMemo'
   | 'setProgress'
   | 'addChecklistItem'
   | 'deleteChecklistItem'
@@ -31,6 +32,9 @@ export function createNoticeActions(
     },
     unsaveNotice(noticeId) {
       return syncAfter(repository.unsaveNotice(noticeId));
+    },
+    setNoticeMemo(noticeId, memo) {
+      return repository.setNoticeMemo(noticeId, memo);
     },
     setProgress(noticeId, progress) {
       return syncAfter(repository.setProgress(noticeId, progress));

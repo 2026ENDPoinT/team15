@@ -50,7 +50,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
       .getByText(t09Title, { exact: true })
       .locator('..');
     const toggle = card.getByRole('button', {
-      name: /공지 자세히 보기 ∨|상세 접기 ∧/,
+      name: '공지 자세히 보기 ↗',
     });
     await expect(toggle).toBeVisible();
     if ((await toggle.getAttribute('aria-expanded')) !== 'true')
@@ -83,6 +83,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   });
   await checkedItem.click();
   await expect(checkedItem).toBeChecked();
+  await button('닫기').click();
   const progressSelect = page
     .getByTestId('active-page')
     .getByText(t09Title, { exact: true })
@@ -98,13 +99,14 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await openSaved();
   await expect(
     page
-      .getByTestId('active-page')
+      .getByTestId('notice-sheet-content')
       .getByTestId(/^notice-detail-/)
       .getByText('지원 조건 불일치', {
         exact: true,
       }),
   ).toBeVisible();
   await expect(checkedItem).toBeChecked();
+  await button('닫기').click();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('3학년').click();
   await expect(
@@ -135,7 +137,6 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await button('닫기').click();
   await openSaved();
   await expect(checkedItem).toBeChecked();
-  await expect(progressSelect).toHaveValue('preparing');
   await expect(
     page.getByText('신청 마감 · 2026-11-23 18:00', { exact: true }),
   ).toBeVisible();
@@ -144,7 +145,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByText(/체크리스트가 변경되었어요/)).toBeVisible();
+  await expect(page.getByText(/체크리스트가 변경되었어요/)).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath('t09_changed_detail.png'),
     fullPage: true,

@@ -119,7 +119,7 @@ test('실제 HWPX에서 검증한 첨부 정보를 모의 분석으로 상세와
     .getByTestId('active-page')
     .getByText(recorded.notice.title, { exact: true })
     .locator('..')
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   for (const item of additional) {
     await expect(

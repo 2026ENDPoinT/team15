@@ -71,23 +71,24 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     .locator('..');
   const collapsedHeight = (await detailCard.boundingBox())!.height;
   await detailCard
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
-    detailCard.getByText('신청 대상', { exact: true }),
+    page
+      .getByTestId('notice-sheet-content')
+      .getByText('신청 대상', { exact: true }),
   ).toBeVisible();
-  expect((await detailCard.boundingBox())!.height).toBeGreaterThan(
-    collapsedHeight,
-  );
+  expect((await detailCard.boundingBox())!.height).toBe(collapsedHeight);
   await expect(
     page.getByRole('button', { name: '닫기', exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await page
     .getByRole('checkbox', { name: '참가 신청서 준비', checked: false })
     .click();
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   const progressSelect = detailCard.getByRole('combobox', {
     name: '공지 상태',
   });
@@ -112,15 +113,13 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await page.reload();
   await expect(scholarship).toBeVisible();
   await detailCard
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(progressSelect).toHaveValue('preparing');
-  await detailCard
-    .getByRole('button', { name: '상세 접기 ∧', exact: true })
-    .click();
   await expect(detailCard.getByText('신청 대상', { exact: true })).toHaveCount(
     0,
   );

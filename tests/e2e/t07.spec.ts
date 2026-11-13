@@ -122,10 +122,12 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     page.getByRole('button', { name: '공지 새로고침', exact: true }),
   ).toBeEnabled();
   // The title is taken from the public HTML fixture, not an authored display sample.
-  const actualCsTitle = page.getByText(
-    '컴퓨터공학과 취업준비 멘토링2 EPiC 신청-선착순 29명(안내-장학금지급)',
-    { exact: true },
-  );
+  const actualCsTitle = page
+    .getByTestId('active-page')
+    .getByText(
+      '컴퓨터공학과 취업준비 멘토링2 EPiC 신청-선착순 29명(안내-장학금지급)',
+      { exact: true },
+    );
   await expect(actualCsTitle).toBeVisible();
   const card = page.getByTestId('discover-card');
   await expect(card).not.toContainText(/확인 필요|원문에서 확인|시각 미확인/);
@@ -158,11 +160,11 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   });
   await sourceButton.click();
   await expect(
-    savedCard.getByRole('button', { name: '공지 자세히 보기 ∨', exact: true }),
+    savedCard.getByRole('button', { name: '공지 자세히 보기 ↗', exact: true }),
   ).toHaveAttribute('aria-expanded', 'false');
   const sourceBox = (await sourceButton.boundingBox())!;
   const detailBox = (await savedCard
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .boundingBox())!;
   expect(Math.abs(sourceBox.y - detailBox.y)).toBeLessThan(3);
   expect(sourceBox.x).toBeGreaterThan(detailBox.x + detailBox.width);
@@ -171,10 +173,14 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   });
   await actualCsTitle
     .locator('..')
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
-    savedCard.getByRole('button', { name: '공지 원문 열기', exact: true }),
+    savedCard.getByRole('button', {
+      name: '공지 원문 열기',
+      exact: true,
+      includeHidden: true,
+    }),
   ).toHaveCount(1);
   await expect(
     savedCard.getByRole('button', { name: '분석 다시 시도', exact: true }),
@@ -203,6 +209,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   const progressSelect = actualCsTitle
     .locator('..')
     .getByRole('combobox', { name: '공지 상태' });
@@ -233,14 +240,14 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     )
     .locator('..');
   await savedGeneral
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
-    savedGeneral.getByText('방문 시작 · 2026-12-14', { exact: true }),
+    page
+      .getByTestId('notice-sheet-content')
+      .getByText('방문 시작 · 2026-12-14', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '닫기', exact: true }),
-  ).toBeHidden();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   await page.getByRole('button', { name: '다음 달', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '2026-12-14, 일정 1개', exact: true }),
@@ -257,11 +264,12 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
       { exact: true },
     )
     .locator('..')
-    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(progressSelect).toHaveValue('preparing');
   expect(analyzed).toHaveLength(2);
   expect(errors).toEqual([]);

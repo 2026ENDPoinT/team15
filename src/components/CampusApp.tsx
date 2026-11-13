@@ -1,3 +1,5 @@
+import { NoticeDetailModal } from './NoticeDetailModal';
+import { NoticeMemoEditor } from './NoticeMemoEditor';
 import { ChecklistEditor } from './ChecklistEditor';
 import { CampusButton } from './CampusButton';
 import { campusStyles as s } from './campusStyles';
@@ -125,7 +127,7 @@ function SwipeCard({
     motion.reset();
   };
   const motion = useCardMotion(
-    true,
+    !expanded,
     () => {
       setDragging(true);
       touchLock.startDrag();
@@ -196,11 +198,9 @@ function SwipeCard({
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             aria-expanded={expanded}
-            onPress={() => setExpanded((old) => !old)}
+            onPress={() => setExpanded(true)}
           >
-            <Text style={cardStyles.link}>
-              {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
-            </Text>
+            <Text style={cardStyles.link}>공지 자세히 보기 ↗</Text>
           </Pressable>
           <NoticeSourceButton notice={notice} />
         </View>
@@ -244,9 +244,13 @@ function SwipeCard({
             </>
           )}
         </View>
-        {expanded && (
-          <View style={cardStyles.listDetails}>{detailContent}</View>
-        )}
+        <NoticeDetailModal
+          notice={notice}
+          visible={expanded}
+          onClose={() => setExpanded(false)}
+        >
+          {detailContent}
+        </NoticeDetailModal>
       </Reanimated.View>
     </GestureDetector>
   );
@@ -814,6 +818,17 @@ export default function CampusApp() {
                   />
                 </>
               )}
+              <NoticeMemoEditor
+                key={notice.id}
+                memo={selectedDetail.memo}
+                disabled={detailUpdating}
+                onSave={(memo, onSaved) =>
+                  updateDetail(notice.id, async () => {
+                    await actions.setNoticeMemo(notice.id, memo);
+                    onSaved();
+                  })
+                }
+              />
               <Text style={s.section}>신청·제출 체크리스트</Text>
 
               <ChecklistEditor

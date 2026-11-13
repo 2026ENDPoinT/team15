@@ -98,3 +98,7 @@ export const migration5 = `
     keyword TEXT PRIMARY KEY NOT NULL
   );
 `;
+
+export const migration6 = `
+  ALTER TABLE user_notices ADD COLUMN memo TEXT NOT NULL DEFAULT '';
+`;
