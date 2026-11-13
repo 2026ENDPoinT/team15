@@ -90,7 +90,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
     .getByRole('button', { name: '준비 중으로 변경', exact: true })
     .click();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
@@ -99,9 +99,12 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await openSaved();
   await expect(
-    page.getByText('지원 조건 불일치 · 학년 조건이 입력한 프로필과 달라요.', {
-      exact: true,
-    }),
+    page
+      .getByTestId('active-page')
+      .getByTestId(/^notice-detail-/)
+      .getByText('지원 조건 불일치', {
+        exact: true,
+      }),
   ).toBeVisible();
   await expect(checkedItem).toBeChecked();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
@@ -114,33 +117,28 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   failAI = true;
   await page.clock.fastForward(31_000);
   await button('공지 새로고침').click();
+  await button('공지 갱신 상태').click();
   await expect(
-    page.getByText('공지 갱신이 멈췄어요. 아래 안내를 확인해 주세요.', {
-      exact: true,
-    }),
+    page.getByText('AI 분석 · 0 / 1건', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText('분석 완료 0 / 1건', { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('분석 중 0건 · 대기 0건 · 실패 1건 · 분석 불가 0건', {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(page.getByText('실패 1', { exact: true })).toBeVisible();
+  await button('닫기').click();
   await page.getByRole('tab', { name: '메인', exact: true }).click();
   await expect(
     page.getByTestId('active-page').getByText(t09Title, { exact: true }),
   ).toHaveCount(0);
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   failAI = false;
+  await button('공지 갱신 상태').click();
   await button('다시 시도').click();
   await expect(
-    page.getByText('분석 완료 1 / 1건', { exact: true }),
+    page.getByText('AI 분석 · 1 / 1건', { exact: true }),
   ).toBeVisible();
+  await button('닫기').click();
   await openSaved();
   await expect(checkedItem).toBeChecked();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText('신청 마감 · 2026-11-23 18:00', { exact: true }),

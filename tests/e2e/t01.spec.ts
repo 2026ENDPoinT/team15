@@ -31,6 +31,11 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(scholarship).toHaveCount(0);
   await navigateTo('메인');
   await navigateTo('맞춤 공지');
+  await expect(scholarship).toHaveCount(0);
+  await page
+    .getByTestId('discover-card')
+    .getByRole('button', { name: '↕ 보류', exact: true })
+    .click();
   await expect(scholarship).toBeVisible();
   await page
     .getByTestId('discover-card')
@@ -84,7 +89,9 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
   await detailCard.getByRole('button', { name: '준비 중으로 변경' }).click();
-  await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
+  await expect(
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(scholarship).toBeVisible();
   await detailCard
@@ -93,7 +100,9 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
-  await expect(page.getByText('신청 상태 · 준비 중')).toBeVisible();
+  await expect(
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
+  ).toBeVisible();
   await detailCard
     .getByRole('button', { name: '상세 접기 ∧', exact: true })
     .click();

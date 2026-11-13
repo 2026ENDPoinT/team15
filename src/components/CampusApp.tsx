@@ -1,3 +1,5 @@
+import { deferNotice, orderNoticeQueue } from '../domain/noticeQueue';
+import { DiscoverToolbar } from './DiscoverToolbar';
 import { RenderedPage } from './RenderedPage';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -297,7 +299,7 @@ export default function CampusApp() {
     saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
-  const [held, setHeld] = useState<string[]>([]);
+  const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
   const [options] = useState([
     '대회',
@@ -399,7 +401,6 @@ export default function CampusApp() {
         pageRef.current = next;
         gesturePage.value = next;
         setPage(next);
-        setHeld([]);
         setMessage('');
         scrolls.current[next]?.scrollTo({ y: 0, animated: false });
       }
@@ -490,8 +491,8 @@ export default function CampusApp() {
 
   const act = async (id: string, action: string) => {
     if (action === 'hold') {
-      setHeld((old) => [...old, id]);
-      setMessage('보류했어요. 다른 화면에 다녀오면 다시 나타나요.');
+      setDeferredNoticeIds((old) => deferNotice(old, id));
+      setMessage('목록 맨 뒤로 보냈어요. 차례가 되면 다시 나타나요.');
       return true;
     }
     const write = {
@@ -504,6 +505,7 @@ export default function CampusApp() {
     changing.current = true;
     try {
       await write(id);
+      setDeferredNoticeIds((old) => old.filter((entry) => entry !== id));
     } catch {
       setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
       return false;
@@ -846,7 +848,7 @@ export default function CampusApp() {
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
-                          page === pageRef.current ? held : null,
+                          deferredNoticeIds,
                           profile,
                           page === 1 ? showAll : null,
                           minute,
@@ -873,12 +875,11 @@ export default function CampusApp() {
                         : page === 1
                           ? 'unseen'
                           : 'saved';
-                    const visible = notices.filter((notice) => {
+                    let visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
                         ((page === 1 || page === 2) &&
-                          endedNoticeIds.has(notice.id)) ||
-                        (page === pageRef.current && held.includes(notice.id))
+                          endedNoticeIds.has(notice.id))
                       )
                         return false;
                       if (page !== 1 || showAll) return true;
@@ -901,10 +902,6 @@ export default function CampusApp() {
                         )
                       );
                     });
-                    const nextNotice =
-                      visible.find(
-                        ({ id }) => page === 1 && id === demoNewNoticeId,
-                      ) ?? visible[0];
                     const demoPreview =
                       page === 2 &&
                       demoNewNoticeId &&
@@ -926,6 +923,12 @@ export default function CampusApp() {
                         return rank(a.id) - rank(b.id);
                       });
                     }
+                    visible = orderNoticeQueue(
+                      visible,
+                      deferredNoticeIds,
+                      page === 1 ? demoNewNoticeId : undefined,
+                    );
+                    const nextNotice = visible[0];
                     return (
                       <View
                         key={page}
@@ -943,173 +946,174 @@ export default function CampusApp() {
                         }
                       >
                         {page === 1 ? (
-                          <GestureScrollView
+                          <View
                             testID={
                               page === pageRef.current
                                 ? 'active-page'
                                 : 'inactive-page-1'
                             }
-                            ref={(scroll) => {
-                              scrolls.current[page] = scroll;
-                            }}
-                            keyboardShouldPersistTaps="handled"
-                            contentContainerStyle={s.discoverPage}
+                            style={s.discoverPage}
                           >
-                            <View style={s.between}>
-                              <Text
-                                accessibilityRole="header"
-                                style={s.section}
-                              >
-                                맞춤 공지
-                              </Text>
-                              <Text style={s.muted}>
-                                남은 공지 {visible.length}개
-                              </Text>
-                            </View>
-                            <Button
-                              label={
-                                syncStatus.phase === 'idle'
-                                  ? '공지 새로고침'
-                                  : '공지 갱신 중…'
+                            <DiscoverToolbar
+                              active={page === pageRef.current}
+                              count={visible.length}
+                              showAll={showAll}
+                              onToggle={() => setShowAll(!showAll)}
+                              refreshing={syncStatus.phase !== 'idle'}
+                              onRefresh={refreshNotices}
+                              status={
+                                syncStatus.phase === 'collecting'
+                                  ? '수집 중'
+                                  : syncStatus.phase === 'analyzing'
+                                    ? `AI 분석 ${analysisProgress.completed}/${analysisProgress.total}`
+                                    : analysisProgress.failed +
+                                          analysisProgress.waiting >
+                                          0 || !!syncStatus.message
+                                      ? '갱신 안내 확인'
+                                      : '갱신 상태'
                               }
-                              disabled={syncStatus.phase !== 'idle'}
-                              onPress={() => {
-                                if (syncStatus.phase === 'idle')
-                                  void refreshNotices();
-                              }}
-                            />
-                            {refreshDemoNotice && (
-                              <Button
-                                label="시연 공지 새로고침"
-                                onPress={() => void refreshDemoNotice()}
-                              />
-                            )}
-                            <Button
-                              label={showAll ? '맞춤 보기' : '전체 공지 보기'}
-                              onPress={() => setShowAll(!showAll)}
-                            />
-                            <Text
-                              accessibilityLiveRegion="polite"
-                              style={s.muted}
                             >
-                              {syncStatus.phase === 'collecting'
-                                ? '원문 수집 중 · 분석이 완료되면 공지를 표시해요.'
-                                : syncStatus.phase === 'analyzing'
-                                  ? 'AI 분석 중 · 완료된 공지부터 표시해요.'
-                                  : analysisProgress.waiting +
-                                        analysisProgress.failed >
-                                      0
-                                    ? '공지 갱신이 멈췄어요. 아래 안내를 확인해 주세요.'
-                                    : '공지 갱신 대기 중'}
-                            </Text>
-                            {analysisProgress.total > 0 && (
-                              <View testID="analysis-progress" style={s.card}>
+                              {refreshDemoNotice && (
+                                <Button
+                                  label="시연 공지 새로고침"
+                                  onPress={() => void refreshDemoNotice()}
+                                />
+                              )}
+                              {syncStatus.phase === 'collecting' && (
                                 <Text
                                   accessibilityLiveRegion="polite"
-                                  style={s.section}
+                                  style={s.muted}
                                 >
-                                  분석 완료 {analysisProgress.completed} /{' '}
-                                  {analysisProgress.total}건
-                                </Text>
-                                <View
-                                  accessibilityRole="progressbar"
-                                  accessibilityLabel="공지 분석 진행률"
-                                  accessibilityValue={{
-                                    min: 0,
-                                    max: analysisProgress.total,
-                                    now: analysisProgress.completed,
-                                  }}
-                                  style={{
-                                    height: 6,
-                                    backgroundColor: '#e4e9df',
-                                    borderRadius: 3,
-                                    overflow: 'hidden',
-                                  }}
-                                >
-                                  <View
-                                    style={{
-                                      height: 6,
-                                      width: `${(analysisProgress.completed / analysisProgress.total) * 100}%`,
-                                      backgroundColor: '#28634d',
-                                    }}
-                                  />
-                                </View>
-                                <Text style={s.muted}>
-                                  분석 중 {analysisProgress.running}건 · 대기{' '}
-                                  {analysisProgress.waiting}건 · 실패{' '}
-                                  {analysisProgress.failed}건 · 분석 불가{' '}
-                                  {analysisProgress.unsupported}건
-                                </Text>
-                                <Text style={s.muted}>
-                                  최신 분석이 끝난 실제 공지만 카드에 표시해요.
-                                </Text>
-                                {analysisProgress.waiting +
-                                  analysisProgress.failed >
-                                  0 &&
-                                  syncStatus.phase === 'idle' &&
-                                  (hasAnalysisAccess &&
-                                  !syncStatus.analysisBlocked ? (
-                                    <Button
-                                      label="다시 시도"
-                                      disabled={
-                                        !!syncStatus.analysisRetryAt &&
-                                        Date.parse(syncStatus.analysisRetryAt) >
-                                          Date.now()
-                                      }
-                                      onPress={() =>
-                                        void analyzePendingNotices()
-                                      }
-                                    />
-                                  ) : (
-                                    <Button
-                                      label="AI 분석 설정하기"
-                                      onPress={() => navigate(3)}
-                                    />
-                                  ))}
-                              </View>
-                            )}
-                            {syncState.sources.map((source) => (
-                              <Text key={source.sourceId} style={s.muted}>
-                                {source.sourceId === 'seoultech_cs'
-                                  ? '학과'
-                                  : '본교'}{' '}
-                                · 마지막 전체 수집 성공:{' '}
-                                {source.lastSuccessAt
-                                  ? new Date(
-                                      source.lastSuccessAt,
-                                    ).toLocaleString('ko-KR', {
-                                      timeZone: 'Asia/Seoul',
-                                    })
-                                  : '아직 없음'}
-                                {source.lastError
-                                  ? ` · 일부 수집 실패 (${source.detailFailures}건)`
-                                  : ''}
-                              </Text>
-                            ))}
-                            {!!demoStatus && (
-                              <Text
-                                accessibilityLiveRegion="polite"
-                                style={s.reason}
-                              >
-                                {demoStatus}
-                              </Text>
-                            )}
-                            {!!syncStatus.message && (
-                              <Text style={s.reason}>{syncStatus.message}</Text>
-                            )}
-                            {!!syncStatus.analysisRetryAt &&
-                              Date.parse(syncStatus.analysisRetryAt) >
-                                Date.now() && (
-                                <Text style={s.muted}>
-                                  분석 재시도 가능:{' '}
-                                  {new Date(
-                                    syncStatus.analysisRetryAt,
-                                  ).toLocaleString('ko-KR', {
-                                    timeZone: 'Asia/Seoul',
-                                  })}{' '}
-                                  KST
+                                  공지 수집 중…
                                 </Text>
                               )}
+                              {analysisProgress.total > 0 && (
+                                <View
+                                  testID="analysis-progress"
+                                  style={s.analysisProgress}
+                                >
+                                  <Text
+                                    accessibilityLiveRegion="polite"
+                                    style={s.muted}
+                                  >
+                                    AI{' '}
+                                    {syncStatus.phase === 'analyzing'
+                                      ? '분석 중'
+                                      : '분석'}{' '}
+                                    · {analysisProgress.completed} /{' '}
+                                    {analysisProgress.total}건
+                                  </Text>
+                                  <View
+                                    accessibilityRole="progressbar"
+                                    accessibilityLabel="공지 분석 진행률"
+                                    accessibilityValue={{
+                                      min: 0,
+                                      max: analysisProgress.total,
+                                      now: analysisProgress.completed,
+                                    }}
+                                    style={{
+                                      height: 3,
+                                      backgroundColor: '#e4e9df',
+                                      borderRadius: 3,
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        height: 3,
+                                        width: `${(analysisProgress.completed / analysisProgress.total) * 100}%`,
+                                        backgroundColor: '#28634d',
+                                      }}
+                                    />
+                                  </View>
+                                  {analysisProgress.waiting +
+                                    analysisProgress.failed +
+                                    analysisProgress.unsupported >
+                                    0 && (
+                                    <Text style={s.muted}>
+                                      {[
+                                        analysisProgress.waiting > 0 &&
+                                          `대기 ${analysisProgress.waiting}`,
+                                        analysisProgress.failed > 0 &&
+                                          `실패 ${analysisProgress.failed}`,
+                                        analysisProgress.unsupported > 0 &&
+                                          `분석 불가 ${analysisProgress.unsupported}`,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </Text>
+                                  )}
+                                  {analysisProgress.waiting +
+                                    analysisProgress.failed >
+                                    0 &&
+                                    syncStatus.phase === 'idle' &&
+                                    (hasAnalysisAccess &&
+                                    !syncStatus.analysisBlocked ? (
+                                      <Button
+                                        label="다시 시도"
+                                        disabled={
+                                          !!syncStatus.analysisRetryAt &&
+                                          Date.parse(
+                                            syncStatus.analysisRetryAt,
+                                          ) > Date.now()
+                                        }
+                                        onPress={() =>
+                                          void analyzePendingNotices()
+                                        }
+                                      />
+                                    ) : (
+                                      <Button
+                                        label="AI 분석 설정하기"
+                                        onPress={() => navigate(3)}
+                                      />
+                                    ))}
+                                </View>
+                              )}
+                              {syncState.sources.map((source) => (
+                                <Text key={source.sourceId} style={s.muted}>
+                                  {source.sourceId === 'seoultech_cs'
+                                    ? '학과'
+                                    : '본교'}{' '}
+                                  · 마지막 전체 수집 성공:{' '}
+                                  {source.lastSuccessAt
+                                    ? new Date(
+                                        source.lastSuccessAt,
+                                      ).toLocaleString('ko-KR', {
+                                        timeZone: 'Asia/Seoul',
+                                      })
+                                    : '아직 없음'}
+                                  {source.lastError
+                                    ? ` · 일부 수집 실패 (${source.detailFailures}건)`
+                                    : ''}
+                                </Text>
+                              ))}
+                              {!!demoStatus && (
+                                <Text
+                                  accessibilityLiveRegion="polite"
+                                  style={s.reason}
+                                >
+                                  {demoStatus}
+                                </Text>
+                              )}
+                              {!!syncStatus.message && (
+                                <Text style={s.reason}>
+                                  {syncStatus.message}
+                                </Text>
+                              )}
+                              {!!syncStatus.analysisRetryAt &&
+                                Date.parse(syncStatus.analysisRetryAt) >
+                                  Date.now() && (
+                                  <Text style={s.muted}>
+                                    분석 재시도 가능:{' '}
+                                    {new Date(
+                                      syncStatus.analysisRetryAt,
+                                    ).toLocaleString('ko-KR', {
+                                      timeZone: 'Asia/Seoul',
+                                    })}{' '}
+                                    KST
+                                  </Text>
+                                )}
+                            </DiscoverToolbar>
                             {nextNotice ? (
                               <DiscoverCard
                                 key={nextNotice.id}
@@ -1127,14 +1131,12 @@ export default function CampusApp() {
                             ) : (
                               <View style={s.card}>
                                 <Text style={s.description}>
-                                  {held.length
-                                    ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                                    : analysisProgress.completed <
-                                        analysisProgress.total
-                                      ? '표시할 분석 완료 공지가 없어요. 위에서 분석 진행 상황을 확인해 주세요.'
-                                      : showAll
-                                        ? '새 공지가 없어요.'
-                                        : '선호 키워드에 맞는 새 공지가 없어요.'}
+                                  {analysisProgress.completed <
+                                  analysisProgress.total
+                                    ? '표시할 분석 완료 공지가 없어요. 위에서 분석 진행 상황을 확인해 주세요.'
+                                    : showAll
+                                      ? '새 공지가 없어요.'
+                                      : '선호 키워드에 맞는 새 공지가 없어요.'}
                                 </Text>
                                 <Button
                                   label="키워드 수정하기 →"
@@ -1142,7 +1144,7 @@ export default function CampusApp() {
                                 />
                               </View>
                             )}
-                          </GestureScrollView>
+                          </View>
                         ) : (
                           <GestureScrollView
                             testID={
@@ -1398,16 +1400,14 @@ export default function CampusApp() {
                                 {!visible.length && (
                                   <View style={s.card}>
                                     <Text style={s.description}>
-                                      {held.length
-                                        ? '보류한 공지는 다른 화면에 다녀오면 다시 표시돼요.'
-                                        : page === 0
-                                          ? '휴지통이 비어 있어요.'
-                                          : page === 1
-                                            ? '선호 키워드에 맞는 새 공지가 없어요.'
-                                            : analysisProgress.completed <
-                                                analysisProgress.total
-                                              ? '분석 중이거나 확인이 필요한 공지는 숨겨 두었어요. 맞춤 공지에서 분석 진행 상황을 확인해 주세요.'
-                                              : '아직 선택한 공지가 없어요.'}
+                                      {page === 0
+                                        ? '휴지통이 비어 있어요.'
+                                        : page === 1
+                                          ? '선호 키워드에 맞는 새 공지가 없어요.'
+                                          : analysisProgress.completed <
+                                              analysisProgress.total
+                                            ? '분석 중이거나 확인이 필요한 공지는 숨겨 두었어요. 맞춤 공지에서 분석 진행 상황을 확인해 주세요.'
+                                            : '아직 선택한 공지가 없어요.'}
                                     </Text>
                                     {page !== 0 && (
                                       <Button
@@ -1728,7 +1728,7 @@ export default function CampusApp() {
             <Text style={s.section}>사용 방법 안내</Text>
             <Text style={s.description}>
               {
-                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 다른 화면에 갔다 돌아오면 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
+                '카드 안에서 ← 버리기, → 선택 또는 복구, ↕ 보류할 수 있어요.\n\n보류한 공지는 목록 맨 뒤로 이동해요. 다른 공지를 넘기면 차례대로 다시 나타나요.\n\n카드 바깥 여백에서 좌우로 밀거나 하단 탭을 눌러 화면을 이동하세요. 휴지통에서는 영구 삭제하지 않습니다.'
               }
             </Text>
 
@@ -1759,12 +1759,16 @@ const s = StyleSheet.create({
     paddingTop: 16,
     gap: 14,
   },
+  analysisProgress: { gap: 4 },
   discoverPage: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     width: '100%',
     maxWidth: 600,
     alignSelf: 'center',
-    padding: 20,
-    gap: 12,
+    padding: 12,
+    gap: 8,
   },
 
   pageViewport: { flex: 1, overflow: 'hidden' },

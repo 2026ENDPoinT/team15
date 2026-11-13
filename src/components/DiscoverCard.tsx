@@ -1,3 +1,4 @@
+import { NoticeSheet } from './NoticeSheet';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
 import { useCardMotion } from './gestureMotion';
@@ -38,14 +39,14 @@ export default function DiscoverCard({
   const actRef = useRef(act);
   actRef.current = act;
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
-  const reset = () => {
-    motion.reset();
+    };
+  }, []);
+  const reset = (animated = true) => {
+    motion.reset(animated);
     touchLock.release();
   };
   const perform = (action: Action, verticalDirection = -1) => {
@@ -55,13 +56,15 @@ export default function DiscoverCard({
     touchLock.startDrag();
     const complete = async (finished: boolean) => {
       if (!mounted.current) return;
+      let applied = false;
       try {
-        if (finished) await actRef.current(action);
+        if (finished) applied = await actRef.current(action);
       } finally {
         if (mounted.current) {
           busyRef.current = false;
           setBusy(false);
-          reset();
+          // A completed swipe must not fly back from outside the screen.
+          reset(!applied);
         }
       }
     };
@@ -87,88 +90,121 @@ export default function DiscoverCard({
     },
     reset,
   );
-  useEffect(() => {
-    mounted.current = true;
-    motion.y.value = 60;
-    motion.y.value = withTiming(0, { duration: 240 });
-  }, []);
   return (
-    <GestureDetector gesture={motion.gesture}>
-      <Reanimated.View
-        testID="discover-card"
-        pointerEvents={busy ? 'none' : 'auto'}
-        style={[styles.card, motion.style]}
-      >
-        <View testID="discover-card-body" style={styles.bodyContent}>
-          {isNew && <Text style={styles.tags}>새 공지</Text>}
-          <Text style={styles.muted}>{notice.org}</Text>
-          <Text accessibilityRole="header" style={styles.title}>
-            {notice.title}
-          </Text>
-          <Text style={styles.muted}>
-            {notice.synthetic
-              ? '가상 예시'
-              : '실제 공지 · ' + notice.analysisLabel}
-          </Text>
-          <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
-          <Text style={styles.muted}>
-            {eligibilityLabel} ·{' '}
-            {notice.date
-              ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
-              : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
-          </Text>
-          {expanded && detailContent}
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded }}
-          aria-expanded={expanded}
-          onPress={() => {
-            setExpanded((old) => !old);
-          }}
-          style={styles.detailToggle}
+    <>
+      <GestureDetector gesture={motion.gesture}>
+        <Reanimated.View
+          testID="discover-card"
+          pointerEvents={busy ? 'none' : 'auto'}
+          style={[styles.card, motion.style]}
         >
-          <Text style={styles.link}>
-            {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
-          </Text>
-        </Pressable>
-        <View style={styles.actions}>
-          {(
-            [
-              ['discard', '← 버리기'],
-              ['hold', '↕ 보류'],
-              ['select', '선택 →'],
-            ] as const
-          ).map(([action, label]) => (
-            <Pressable
-              key={action}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              disabled={busy}
-              onPress={() => perform(action)}
-              style={[styles.button, action === 'select' && styles.primary]}
+          <View testID="discover-card-body" style={styles.bodyContent}>
+            {isNew && <Text style={styles.tags}>새 공지</Text>}
+            <Text numberOfLines={1} style={styles.muted}>
+              {notice.org}
+            </Text>
+            <Text
+              numberOfLines={3}
+              accessibilityRole="header"
+              style={styles.title}
             >
-              <Text style={[styles.link, action === 'select' && styles.light]}>
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </Reanimated.View>
-    </GestureDetector>
+              {notice.title}
+            </Text>
+            <Text numberOfLines={1} style={styles.muted}>
+              {notice.synthetic
+                ? '가상 예시'
+                : '실제 공지 · ' + notice.analysisLabel}
+            </Text>
+            <Text numberOfLines={1} style={styles.tags}>
+              {notice.tags.join(' · ')}
+            </Text>
+            <Text numberOfLines={2} style={styles.muted}>
+              {eligibilityLabel} ·{' '}
+              {notice.date
+                ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
+                : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
+            </Text>
+            <Text numberOfLines={2} style={styles.muted}>
+              {notice.summary}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            aria-expanded={expanded}
+            onPress={() => {
+              setExpanded((old) => !old);
+            }}
+            style={styles.detailToggle}
+          >
+            <Text style={styles.link}>
+              {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
+            </Text>
+          </Pressable>
+          <View style={styles.actions}>
+            {(
+              [
+                ['discard', '← 버리기'],
+                ['hold', '↕ 보류'],
+                ['select', '선택 →'],
+              ] as const
+            ).map(([action, label]) => (
+              <Pressable
+                key={action}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                disabled={busy}
+                onPress={() => perform(action)}
+                style={[styles.button, action === 'select' && styles.primary]}
+              >
+                <Text
+                  style={[styles.link, action === 'select' && styles.light]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Reanimated.View>
+      </GestureDetector>
+      <NoticeSheet
+        visible={expanded}
+        title="공지 상세"
+        onClose={() => setExpanded(false)}
+      >
+        <Text style={styles.title}>{notice.title}</Text>
+        <Text style={styles.muted}>{notice.org}</Text>
+        <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
+        <Text style={styles.muted}>{notice.summary}</Text>
+        <Text style={styles.muted}>{eligibilityLabel}</Text>
+        <Text style={styles.muted}>
+          {notice.date
+            ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
+            : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
+        </Text>
+        {expanded && detailContent}
+      </NoticeSheet>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 0,
     borderWidth: 1,
     borderColor: '#dfe5d9',
     borderRadius: 20,
     backgroundColor: 'white',
     overflow: 'hidden',
   },
-  bodyContent: { padding: 18, gap: 14 },
+  bodyContent: {
+    flexShrink: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    padding: 14,
+    gap: 6,
+  },
   title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#213e32' },
   muted: { fontSize: 12, lineHeight: 19, color: '#728174' },
   tags: { fontSize: 12, lineHeight: 20, color: '#28634d' },

@@ -75,7 +75,7 @@ test('실제 HTML fixture로 Expo 파싱·해시·검증 화면을 연결한다'
   ).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: '맞춤 공지', exact: true }),
+    page.getByRole('heading', { name: /^맞춤 공지 · \d+개$/ }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });

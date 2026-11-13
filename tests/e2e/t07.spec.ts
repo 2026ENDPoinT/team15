@@ -71,11 +71,14 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await page
     .getByRole('button', { name: '공지 새로고침', exact: true })
     .click();
+  await page
+    .getByRole('button', { name: '공지 갱신 상태', exact: true })
+    .click();
   await expect(
-    page.getByText('분석 완료 0 / 2건', { exact: true }),
+    page.getByText('AI 분석 중 · 0 / 2건', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('분석 중 1건 · 대기 1건 · 실패 0건 · 분석 불가 0건', {
+    page.getByText('대기 1', {
       exact: true,
     }),
   ).toBeVisible();
@@ -103,11 +106,12 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   ).toHaveCount(0);
   releaseAnalysis();
   await expect(
-    page.getByText('분석 완료 2 / 2건', { exact: true }),
+    page.getByText('AI 분석 · 2 / 2건', { exact: true }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
   await expect(
-    page.getByText('공지 갱신 대기 중', { exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: '공지 새로고침', exact: true }),
+  ).toBeEnabled();
   // The title is taken from the public HTML fixture, not an authored display sample.
   const actualCsTitle = page.getByText(
     '컴퓨터공학과 취업준비 멘토링2 EPiC 신청-선착순 29명(안내-장학금지급)',
@@ -132,7 +136,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
       '프로그램 일시 시작 · 일시: 11.2.(월)~12.23.(수) · 후보 2026-11-02 · 확인 필요',
       { exact: true },
     ),
-  ).toBeVisible();
+  ).toHaveCount(0);
   const text = cs.envelope.data.checklist[0]!.text;
   await page
     .getByRole('checkbox', { name: text, exact: true, checked: false })
@@ -145,7 +149,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     .getByRole('button', { name: '준비 중으로 변경', exact: true })
     .click();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('t07_real_detail.png'),
@@ -202,7 +206,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   expect(analyzed).toHaveLength(2);
   expect(errors).toEqual([]);
