@@ -7,8 +7,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F6F8F7",
-    "plugins": ["expo-router"],
-    "android": { "package": "kr.team15.campusnotice" },
-    "web": { "bundler": "metro", "output": "single" }
+    "plugins": ["expo-router", "expo-sqlite"],
+    "android": {
+      "package": "kr.team15.campusnotice"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
   }
 }
