@@ -15,9 +15,7 @@ test('첫 실행 설정과 키워드는 저장되고 재실행 시 설정을 반
     page.getByText('나에게 맞는 공지로 시작해요', { exact: true }),
   ).toBeVisible();
   await page.getByRole('radio', { name: '정보통신대학', exact: true }).click();
-  await page
-    .getByRole('textbox', { name: '학과', exact: true })
-    .fill('컴퓨터공학과');
+  await page.getByRole('radio', { name: '컴퓨터공학과', exact: true }).click();
   await page.getByRole('button', { name: '2학년', exact: true }).click();
   await page.screenshot({
     path: testInfo.outputPath('initial-profile.png'),
@@ -33,8 +31,8 @@ test('첫 실행 설정과 키워드는 저장되고 재실행 시 설정을 반
   await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
   await page.getByRole('button', { name: '이전', exact: true }).click();
   await expect(
-    page.getByRole('textbox', { name: '학과', exact: true }),
-  ).toHaveValue('컴퓨터공학과');
+    page.getByRole('radio', { name: '컴퓨터공학과', exact: true }),
+  ).toBeChecked();
   await page
     .getByRole('button', { name: '다음: 관심 키워드', exact: true })
     .click();
@@ -54,8 +52,8 @@ test('첫 실행 설정과 키워드는 저장되고 재실행 시 설정을 반
   await page.reload();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await expect(
-    page.getByRole('textbox', { name: '학과', exact: true }),
-  ).toHaveValue('컴퓨터공학과');
+    page.getByRole('radio', { name: '컴퓨터공학과', exact: true }),
+  ).toBeChecked();
   await expect(
     page.getByRole('radio', { name: '정보통신대학', exact: true }),
   ).toBeChecked();
