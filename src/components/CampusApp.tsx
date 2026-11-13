@@ -1136,6 +1136,7 @@ export default function CampusApp() {
                               <DiscoverCard
                                 key={nextNotice.id}
                                 notice={nextNotice}
+                                remainingCount={visible.length - 1}
                                 isNew={nextNotice.id === demoNewNoticeId}
                                 eligibilityLabel={
                                   eligibilityLabels[

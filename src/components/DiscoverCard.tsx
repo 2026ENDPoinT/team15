@@ -17,6 +17,7 @@ type Action = 'discard' | 'hold' | 'select';
 export default function DiscoverCard({
   notice,
   isNew = false,
+  remainingCount = 0,
   detailContent,
   eligibilityLabel,
   act,
@@ -24,6 +25,7 @@ export default function DiscoverCard({
 }: {
   notice: Notice;
   isNew?: boolean;
+  remainingCount?: number;
   detailContent: ReactNode;
   eligibilityLabel: string;
   act: (action: Action) => Promise<boolean>;
@@ -90,7 +92,21 @@ export default function DiscoverCard({
     reset,
   );
   return (
-    <>
+    <View style={styles.deck}>
+      {remainingCount > 0 && (
+        <View
+          pointerEvents="none"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={StyleSheet.absoluteFill}
+        >
+          {remainingCount > 1 && (
+            <View style={[styles.stackCard, styles.stackBack]} />
+          )}
+          <View style={[styles.stackCard, styles.stackFront]} />
+        </View>
+      )}
       <GestureDetector gesture={motion.gesture}>
         <Reanimated.View
           testID="discover-card"
@@ -108,11 +124,6 @@ export default function DiscoverCard({
               style={styles.title}
             >
               {notice.title}
-            </Text>
-            <Text numberOfLines={1} style={styles.muted}>
-              {notice.synthetic
-                ? '가상 예시'
-                : '실제 공지 · ' + notice.analysisLabel}
             </Text>
             <Text numberOfLines={1} style={styles.tags}>
               {notice.tags.join(' · ')}
@@ -167,11 +178,43 @@ export default function DiscoverCard({
           {expanded && detailContent}
         </Reanimated.View>
       </GestureDetector>
-    </>
+      {remainingCount > 0 && (
+        <Text pointerEvents="none" style={styles.remaining}>
+          다음 공지 {remainingCount}개가 기다리고 있어요
+        </Text>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  deck: { flexShrink: 1, minHeight: 0 },
+  stackCard: {
+    position: 'absolute',
+    top: 24,
+    bottom: 38,
+    borderWidth: 1,
+    borderColor: '#dfe5d9',
+    borderRadius: 20,
+  },
+  stackBack: {
+    left: 20,
+    right: 20,
+    bottom: 28,
+    backgroundColor: '#edf1e8',
+  },
+  stackFront: {
+    left: 10,
+    right: 10,
+    backgroundColor: '#f5f7f1',
+  },
+  remaining: {
+    paddingTop: 28,
+    fontSize: 12,
+    lineHeight: 20,
+    textAlign: 'center',
+    color: '#728174',
+  },
   card: {
     flexShrink: 1,
     minHeight: 0,
