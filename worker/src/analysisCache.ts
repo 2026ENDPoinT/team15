@@ -5,7 +5,7 @@ import {
 } from '../../shared/contracts';
 import { analyzeNotice } from './analyze';
 import { ApiFailure, sha256 } from './http';
-import { modelOutputSchema, SYSTEM_INSTRUCTION } from './prompt';
+import { analysisInstruction, modelOutputSchema } from './prompt';
 import type { WorkerDependencies, WorkerEnv } from './types';
 
 export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -14,7 +14,13 @@ export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // model and prompt so changed extraction behavior cannot reuse an old result.
 export function analysisCacheKey(input: AnalyzeNoticeRequest, model: string) {
   return sha256(
-    JSON.stringify([1, input, model, SYSTEM_INSTRUCTION, modelOutputSchema]),
+    JSON.stringify([
+      1,
+      input,
+      model,
+      analysisInstruction(!!input.attachment_texts?.length),
+      modelOutputSchema,
+    ]),
   );
 }
 
