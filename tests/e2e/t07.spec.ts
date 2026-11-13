@@ -134,7 +134,8 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
-  await page
+  await actualCsTitle
+    .locator('..')
     .getByRole('button', { name: '준비 중으로 변경', exact: true })
     .click();
   await expect(
@@ -168,7 +169,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
   await expect(
-    savedGeneral.getByText(/2026-12-14 시각 미확인/).first(),
+    savedGeneral.getByText('방문 시작 · 2026-12-14', { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: '닫기', exact: true }),

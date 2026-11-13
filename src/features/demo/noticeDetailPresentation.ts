@@ -3,7 +3,7 @@ import type { ExtractedEvent } from '../../../shared/contracts';
 
 export function detailEventLabel(event: ExtractedEvent): string {
   if (event.status === 'resolved')
-    return `${event.label} · ${event.date} ${event.time ?? '시각 미확인'}`;
+    return `${event.label} · ${event.date}${event.time ? ` ${event.time}` : ''}`;
   const candidate = event.date
     ? ` · 후보 ${event.date}${event.time ? ` ${event.time}` : ''}`
     : '';
@@ -20,12 +20,17 @@ export function detailReviewNotes(notes: string[], hasAttachments: boolean) {
   for (const note of notes) {
     const text = note.trim().replace(/\s+/g, ' ');
     if (!text) continue;
-    if (attachmentNotes.has(text)) needsAttachmentNote = true;
+    if (
+      attachmentNotes.has(text) ||
+      (/(첨부|이미지|포스터)/.test(text) &&
+        /(분석하지 않|확인하지 못|읽지 않|포함되어 있지 않)/.test(text))
+    )
+      needsAttachmentNote = true;
     else result.add(text);
   }
   if (needsAttachmentNote)
     result.add(
-      '이미지·첨부 내용은 분석하지 않았어요. 원문에서 직접 확인해 주세요.',
+      '첨부 파일 및 이미지 내용은 확인하지 못했으므로 원문에서 확인하시기 바랍니다.',
     );
   return [...result];
 }

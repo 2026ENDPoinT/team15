@@ -15,7 +15,8 @@ import {
   describeDate,
   type ResolvedEvent,
 } from '../domain/dates';
-import { migration1, migration2 } from './migrations';
+import { migration1, migration2, migration3 } from './migrations';
+import type { CampusProfile } from '../domain/campusProfile';
 import type { CollectionResult } from '../sources/collector';
 
 type BindValue = string | number | null;
@@ -39,6 +40,8 @@ export interface SavedNotice {
 }
 
 export interface NoticeRepository {
+  getProfile(): Promise<CampusProfile | null>;
+  saveProfile(profile: CampusProfile): Promise<void>;
   upsertRawNotice(notice: CollectedNotice): Promise<void>;
   applyAnalysis(
     analysis: AnalysisEnvelope,
@@ -205,12 +208,14 @@ export async function createNoticeRepository(
     const version = await db.getFirstAsync<{ user_version: number }>(
       'PRAGMA user_version',
     );
-    if (version?.user_version === 2) return;
-    if (version?.user_version !== 0 && version?.user_version !== 1)
+    const current = version?.user_version;
+    if (current === 3) return;
+    if (current !== 0 && current !== 1 && current !== 2)
       throw new Error('Unsupported notice database version');
-    if (version.user_version === 0) await db.execAsync(migration1);
-    await db.execAsync(migration2);
-    await db.execAsync('PRAGMA user_version = 2');
+    if (current === 0) await db.execAsync(migration1);
+    if (current < 2) await db.execAsync(migration2);
+    await db.execAsync(migration3);
+    await db.execAsync('PRAGMA user_version = 3');
   });
 
   let pending = Promise.resolve();
@@ -275,6 +280,45 @@ export async function createNoticeRepository(
   }
 
   return {
+    getProfile() {
+      return enqueue(async () => {
+        const row = await db.getFirstAsync<
+          Omit<CampusProfile, 'keywords' | 'customKeywords'> & {
+            keywordsJson: string;
+            customKeywordsJson: string;
+          }
+        >(`SELECT college, department, grade, enrollment, keywords_json AS keywordsJson,
+                 custom_keywords_json AS customKeywordsJson FROM profile WHERE id = 1`);
+        if (!row) return null;
+        const { keywordsJson, customKeywordsJson, ...profile } = row;
+        return {
+          ...profile,
+          keywords: JSON.parse(keywordsJson) as string[],
+          customKeywords: JSON.parse(customKeywordsJson) as string[],
+        };
+      });
+    },
+    saveProfile(profile) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `INSERT INTO profile
+            (id, college, department, grade, enrollment, keywords_json, custom_keywords_json, updated_at)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET college = excluded.college, department = excluded.department,
+             grade = excluded.grade, enrollment = excluded.enrollment, keywords_json = excluded.keywords_json,
+             custom_keywords_json = excluded.custom_keywords_json, updated_at = excluded.updated_at`,
+          [
+            profile.college,
+            profile.department,
+            profile.grade,
+            profile.enrollment,
+            JSON.stringify(profile.keywords),
+            JSON.stringify(profile.customKeywords),
+            new Date().toISOString(),
+          ],
+        );
+      });
+    },
     listNoticeRecords() {
       return enqueue(async () => {
         const rows = await db.getAllAsync<{

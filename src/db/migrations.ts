@@ -82,3 +82,8 @@ export const migration2 = `
   );
   INSERT INTO sync_control (id) VALUES (1);
 `;
+
+export const migration3 = `
+  ALTER TABLE profile ADD COLUMN college TEXT;
+  ALTER TABLE profile ADD COLUMN custom_keywords_json TEXT NOT NULL DEFAULT '[]';
+`;

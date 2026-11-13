@@ -43,28 +43,30 @@ export function AnalysisSettings() {
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
-        value={token}
+        value={hasAnalysisAccess ? '********' : token}
         onChangeText={setToken}
         placeholder="팀에서 받은 시연 토큰"
-        editable={!busy}
+        editable={!busy && !hasAnalysisAccess}
+        accessibilityState={{ disabled: busy || hasAnalysisAccess }}
         style={{
           borderWidth: 1,
           borderColor: '#cbd5cf',
           borderRadius: 8,
           padding: 12,
+          backgroundColor: hasAnalysisAccess ? '#edf1ed' : '#ffffff',
         }}
       />
       <ActionButton
-        label={busy ? '토큰 처리 중…' : 'AI 토큰 저장'}
-        onPress={() => void update(false)}
+        secondary={hasAnalysisAccess}
+        label={
+          busy
+            ? '토큰 처리 중…'
+            : hasAnalysisAccess
+              ? 'AI 토큰 삭제'
+              : 'AI 토큰 저장'
+        }
+        onPress={() => void update(hasAnalysisAccess)}
       />
-      {hasAnalysisAccess && (
-        <ActionButton
-          secondary
-          label="AI 토큰 삭제"
-          onPress={() => void update(true)}
-        />
-      )}
       {!!message && (
         <Text accessibilityLiveRegion="polite" style={styles.caption}>
           {message}

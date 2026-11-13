@@ -83,7 +83,12 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   });
   await checkedItem.click();
   await expect(checkedItem).toBeChecked();
-  await button('준비 중으로 변경').click();
+  await page
+    .getByTestId('active-page')
+    .getByText(t09Title, { exact: true })
+    .locator('..')
+    .getByRole('button', { name: '준비 중으로 변경', exact: true })
+    .click();
   await expect(
     page.getByText('신청 상태 · 준비 중', { exact: true }),
   ).toBeVisible();

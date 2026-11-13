@@ -40,6 +40,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  colleges,
+  type College,
+  type CampusProfile,
+} from '../domain/campusProfile';
+import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
 import DiscoverCard from './DiscoverCard';
@@ -50,7 +56,7 @@ import {
   deadlineReminderLabel,
 } from '../features/demo/noticeDetailPresentation';
 
-import type { Disposition as Bucket, Profile } from '../../shared/contracts';
+import type { Disposition as Bucket } from '../../shared/contracts';
 import { evaluateEligibility } from '../domain/eligibility';
 
 const eligibilityLabels = {
@@ -75,23 +81,27 @@ const names = ['휴지통', '맞춤 공지', '메인', '설정'];
 const green = '#28634d';
 function Button({
   label,
+  accessibilityLabel = label,
   onPress,
   primary = false,
   disabled = false,
+  half = false,
 }: {
   label: string;
+  accessibilityLabel?: string;
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
+  half?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[s.button, primary && s.primary]}
+      style={[s.button, half && { flex: 1 }, primary && s.primary]}
     >
       <Text style={[s.buttonText, primary && s.light]}>{label}</Text>
     </Pressable>
@@ -102,6 +112,7 @@ function SwipeCard({
   bucket,
   act,
   detailContent,
+  progressContent,
   eligibilityLabel,
   onDragging,
 }: {
@@ -109,6 +120,7 @@ function SwipeCard({
   bucket: Bucket;
   act: (action: string) => void;
   detailContent: ReactNode;
+  progressContent?: ReactNode;
   eligibilityLabel: string;
   onDragging: (dragging: boolean) => void;
 }) {
@@ -174,13 +186,13 @@ function SwipeCard({
             </Text>
           ))}
         </View>
-        <Text style={s.reason}>{notice.summary}</Text>
         <Text style={s.muted}>{eligibilityLabel}</Text>
         <Text style={s.muted}>
           {notice.date
-            ? `${notice.date} · ${notice.time ? `${notice.time ?? '시각 미확인'} KST` : '시각 미확인'}`
+            ? `${notice.date}${notice.time ? ` · ${notice.time} KST` : ''}`
             : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
         </Text>
+        {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
             <Button label="선택 취소" onPress={() => act('unselect')} />
@@ -200,6 +212,7 @@ function SwipeCard({
             </>
           )}
         </View>
+        {expanded && bucket === 'saved' && detailContent}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded }}
@@ -210,7 +223,7 @@ function SwipeCard({
             {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
           </Text>
         </Pressable>
-        {expanded && detailContent}
+        {expanded && bucket !== 'saved' && detailContent}
       </Reanimated.View>
     </GestureDetector>
   );
@@ -239,12 +252,12 @@ export default function CampusApp() {
     reminderWarning,
     refreshNotices,
     analyzeNotice,
-    setKeywords,
+    profile,
+    saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
   const [held, setHeld] = useState<string[]>([]);
-  const [keys, setKeys] = useState(['대회', '장학금']);
-  const [draft, setDraft] = useState(keys);
+  const [draft, setDraft] = useState(profile.keywords);
   const [options] = useState([
     '대회',
     '장학금',
@@ -253,12 +266,14 @@ export default function CampusApp() {
     '교환학생',
     '인공지능',
   ]);
-  const [customOptions, setCustomOptions] = useState<string[]>([]);
+  const [customOptions, setCustomOptions] = useState(profile.customKeywords);
   const [deletingKeywords, setDeletingKeywords] = useState(false);
   const [custom, setCustom] = useState('');
-  const [dept, setDept] = useState('컴퓨터공학과');
-  const [grade, setGrade] = useState('3학년');
-  const [status, setStatus] = useState('재학');
+  const [college, setCollege] = useState(profile.college);
+  const [dept, setDept] = useState(profile.department);
+  const [grade, setGrade] = useState(profile.grade);
+  const [status, setStatus] = useState(profile.enrollment);
+  const savingProfile = useRef(false);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -431,12 +446,6 @@ export default function CampusApp() {
     return true;
   };
   const [showAll, setShowAll] = useState(false);
-  const profile: Pick<Profile, 'department' | 'grade' | 'enrollment'> = {
-    department: dept,
-    grade: Number(grade.slice(0, 1)) as Profile['grade'],
-    enrollment:
-      status === '재학' ? 'enrolled' : status === '휴학' ? 'leave' : 'other',
-  };
   const eligibility = Object.fromEntries(
     notices.map(({ id }) => [
       id,
@@ -469,6 +478,53 @@ export default function CampusApp() {
       setDetailUpdating(false);
     }
   }
+  function renderNoticeProgress(notice: Notice) {
+    const selectedDetail = details[notice.id];
+    if (selectedDetail?.disposition !== 'saved') return null;
+    return (
+      <View style={{ gap: 8 }}>
+        <Text style={s.muted}>
+          신청 상태 ·{' '}
+          {selectedDetail.progress === 'applied'
+            ? '신청 완료'
+            : selectedDetail.progress === 'preparing'
+              ? '준비 중'
+              : '관심 저장'}
+        </Text>
+        <View style={s.detailActions}>
+          <View style={{ flex: 1 }}>
+            {selectedDetail.progress !== 'preparing' && (
+              <Button
+                label="준비 중으로 변경"
+                disabled={detailUpdating}
+                onPress={() =>
+                  void updateDetail(notice.id, () =>
+                    actions.setProgress(notice.id, 'preparing'),
+                  )
+                }
+              />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            {selectedDetail.progress !== 'applied' && (
+              <Button
+                label="신청 완료로 변경"
+                disabled={detailUpdating}
+                onPress={() =>
+                  void updateDetail(notice.id, () =>
+                    actions.setProgress(notice.id, 'applied'),
+                  )
+                }
+              />
+            )}
+          </View>
+        </View>
+        {detailErrors[notice.id] && (
+          <Text accessibilityRole="alert">변경 내용을 저장하지 못했어요.</Text>
+        )}
+      </View>
+    );
+  }
   function renderNoticeDetails(notice: Notice) {
     const selectedDetail = details[notice.id];
     const selectedChecklist = checklists[notice.id];
@@ -483,31 +539,37 @@ export default function CampusApp() {
       >
         <View style={s.inlineDetail} testID={`notice-detail-${notice.id}`}>
           <Text style={s.section}>상세 내용</Text>
-          <Text
-            style={s.description}
-          >{`${notice.org}\n\n${notice.summary}\n\n${notice.date ? `${notice.date} ${notice.time ? `${notice.time} KST` : '시각 미확인'}` : (notice.scheduleText ?? '일정 미정 · 원문 확인 필요')}\n\n${notice.synthetic ? '가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.' : notice.analysisLabel}`}</Text>
+          {notice.synthetic && (
+            <Text style={s.description}>
+              가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
+            </Text>
+          )}
           <Text style={s.reason}>
             {eligibilityLabels[eligibility[notice.id]!.result]} ·{' '}
             {eligibility[notice.id]!.reasons.join(' ')}
           </Text>
           {!notice.synthetic && selectedDetail && (
             <>
-              <Button
-                label="공지 원문 열기"
-                onPress={() => {
-                  void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
-              <Button
-                label="분석 다시 시도"
-                onPress={() => {
-                  void analyzeNotice(notice.id).catch(() =>
-                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                  );
-                }}
-              />
+              <View style={s.detailActions}>
+                <Button
+                  half
+                  label="공지 원문 열기"
+                  onPress={() => {
+                    void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
+                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                    );
+                  }}
+                />
+                <Button
+                  half
+                  label="분석 다시 시도"
+                  onPress={() => {
+                    void analyzeNotice(notice.id).catch(() =>
+                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                    );
+                  }}
+                />
+              </View>
               {detailReviewNotes(
                 selectedDetail.analysisFresh
                   ? (selectedDetail.analysis?.data.review_notes ?? [])
@@ -594,7 +656,7 @@ export default function CampusApp() {
                   >
                     <Text
                       style={s.buttonText}
-                    >{`${item.completed ? '☑ 완료' : '☐ 미완료'} · ${item.text}`}</Text>
+                    >{`${item.completed ? '☑' : '☐'} ${item.text}`}</Text>
                   </Pressable>
                 ))
               ) : (
@@ -609,9 +671,7 @@ export default function CampusApp() {
                   )}
                 </Text>
                 <Text style={s.muted}>
-                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
-                  상태이거나 예약 시각이 지났다면 예약하지 않아요. 가상 공지는
-                  테스트 예약을 사용해요.
+                  확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요.
                 </Text>
                 <Button
                   label="알림 상태 다시 확인"
@@ -619,41 +679,6 @@ export default function CampusApp() {
                   onPress={() => void updateDetail(notice.id, refreshReminders)}
                 />
               </View>
-              <Text style={s.muted}>
-                신청 상태 ·{' '}
-                {selectedDetail.progress === 'applied'
-                  ? '신청 완료'
-                  : selectedDetail.progress === 'preparing'
-                    ? '준비 중'
-                    : '관심 저장'}
-              </Text>
-              {selectedDetail.progress !== 'preparing' && (
-                <Button
-                  label="준비 중으로 변경"
-                  disabled={detailUpdating}
-                  onPress={() =>
-                    void updateDetail(notice.id, () =>
-                      actions.setProgress(notice.id, 'preparing'),
-                    )
-                  }
-                />
-              )}
-              {selectedDetail.progress !== 'applied' && (
-                <Button
-                  label="신청 완료로 변경"
-                  disabled={detailUpdating}
-                  onPress={() =>
-                    void updateDetail(notice.id, () =>
-                      actions.setProgress(notice.id, 'applied'),
-                    )
-                  }
-                />
-              )}
-              {detailErrors[notice.id] && (
-                <Text accessibilityRole="alert">
-                  변경 내용을 저장하지 못했어요.
-                </Text>
-              )}
             </>
           )}
         </View>
@@ -711,8 +736,8 @@ export default function CampusApp() {
                           dept,
                           grade,
                           status,
-                          keys,
-                          setKeywords,
+                          college,
+                          saveProfile,
                           reminders,
                           notificationSnapshot,
                           refreshReminders,
@@ -734,7 +759,7 @@ export default function CampusApp() {
                           notificationSnapshot,
                           refreshReminders,
                           page === pageRef.current ? held : null,
-                          page === 1 ? keys : null,
+                          profile,
                           page === 1 ? showAll : null,
                           actions,
                           analyzeNotice,
@@ -756,20 +781,46 @@ export default function CampusApp() {
                         : page === 1
                           ? 'unseen'
                           : 'saved';
-                    const visible = notices.filter(
-                      (n) =>
-                        buckets[n.id] === bucket &&
-                        (page !== pageRef.current || !held.includes(n.id)) &&
-                        (page !== 1 ||
-                          showAll ||
-                          (eligibility[n.id]!.result !== 'mismatch' &&
-                            keys.some(
-                              (k) =>
-                                n.tags.includes(k) ||
-                                n.title.includes(k) ||
-                                n.summary.includes(k),
-                            ))),
-                    );
+                    const visible = notices.filter((notice) => {
+                      if (
+                        buckets[notice.id] !== bucket ||
+                        (page === pageRef.current && held.includes(notice.id))
+                      )
+                        return false;
+                      if (page !== 1 || showAll) return true;
+                      const detail = details[notice.id];
+                      return (
+                        matchesCollege(
+                          profile.college,
+                          notice.title,
+                          detail?.raw.bodyText ?? '',
+                          detail?.analysisFresh
+                            ? detail.analysis?.data.eligibility
+                            : undefined,
+                        ) &&
+                        eligibility[notice.id]?.result !== 'mismatch' &&
+                        profile.keywords.some(
+                          (keyword) =>
+                            notice.tags.includes(keyword) ||
+                            notice.title.includes(keyword) ||
+                            notice.summary.includes(keyword),
+                        )
+                      );
+                    });
+                    if (page === 2) {
+                      const priority = { preparing: 0, saved: 1, applied: 2 };
+                      visible.sort((a, b) => {
+                        const rank = (id: string) => {
+                          const progress = details[id]?.progress;
+                          return progress === 'preparing'
+                            ? priority.preparing
+                            : progress === 'applied'
+                              ? priority.applied
+                              : priority.saved;
+                        };
+                        return rank(a.id) - rank(b.id);
+                      });
+                    }
                     const nextNotice = visible[0];
                     return (
                       <View
@@ -824,9 +875,7 @@ export default function CampusApp() {
                               }}
                             />
                             <Button
-                              label={
-                                showAll ? '키워드 맞춤 보기' : '전체 공지 보기'
-                              }
+                              label={showAll ? '맞춤 보기' : '전체 공지 보기'}
                               onPress={() => setShowAll(!showAll)}
                             />
                             <Text
@@ -1025,7 +1074,8 @@ export default function CampusApp() {
                               <View style={s.card}>
                                 <View style={s.between}>
                                   <Button
-                                    label="이전 달"
+                                    label="<"
+                                    accessibilityLabel="이전 달"
                                     onPress={() => {
                                       setMonth(
                                         new Date(
@@ -1042,7 +1092,8 @@ export default function CampusApp() {
                                     {month.getMonth() + 1}월
                                   </Text>
                                   <Button
-                                    label="다음 달"
+                                    label=">"
+                                    accessibilityLabel="다음 달"
                                     onPress={() => {
                                       setMonth(
                                         new Date(
@@ -1172,7 +1223,7 @@ export default function CampusApp() {
                                     ? events
                                         .map(
                                           (event) =>
-                                            `${event.date} ${event.time ?? '시각 미확인'} · ${event.label} · ${event.title}`,
+                                            `${event.date}${event.time ? ` ${event.time}` : ''} · ${event.label} · ${event.title}`,
                                         )
                                         .join('\n')
                                     : '선택한 일정이 없어요.'}
@@ -1202,6 +1253,7 @@ export default function CampusApp() {
                                     bucket={bucket}
                                     onDragging={onCardDragging}
                                     act={(action) => act(n.id, action)}
+                                    progressContent={renderNoticeProgress(n)}
                                     detailContent={renderNoticeDetails(n)}
                                   />
                                 ))}
@@ -1239,6 +1291,36 @@ export default function CampusApp() {
                                 <AnalysisSettings />
                                 <View style={s.card}>
                                   <Text style={s.section}>내 정보</Text>
+                                  <Text style={s.muted}>소속 단과대학</Text>
+                                  <View style={s.row}>
+                                    {(
+                                      [null, ...colleges] as (College | null)[]
+                                    ).map((value) => (
+                                      <Pressable
+                                        key={value ?? 'none'}
+                                        accessibilityRole="radio"
+                                        accessibilityState={{
+                                          checked: college === value,
+                                        }}
+                                        aria-checked={college === value}
+                                        onPress={() => setCollege(value)}
+                                        style={[
+                                          s.button,
+                                          college === value && s.primary,
+                                        ]}
+                                      >
+                                        <Text
+                                          style={
+                                            college === value
+                                              ? s.light
+                                              : s.buttonText
+                                          }
+                                        >
+                                          {value ?? '선택 안 함'}
+                                        </Text>
+                                      </Pressable>
+                                    ))}
+                                  </View>
                                   <Text style={s.muted}>학과</Text>
                                   <TextInput
                                     accessibilityLabel="학과"
@@ -1248,23 +1330,27 @@ export default function CampusApp() {
                                   />
                                   <Text style={s.muted}>학년</Text>
                                   <View style={s.row}>
-                                    {['1학년', '2학년', '3학년', '4학년'].map(
-                                      (g) => (
-                                        <Button
-                                          key={g}
-                                          label={g}
-                                          primary={grade === g}
-                                          onPress={() => setGrade(g)}
-                                        />
-                                      ),
-                                    )}
+                                    {([1, 2, 3, 4, 5] as const).map((g) => (
+                                      <Button
+                                        key={g}
+                                        label={`${g}학년`}
+                                        primary={grade === g}
+                                        onPress={() => setGrade(g)}
+                                      />
+                                    ))}
                                   </View>
                                   <Text style={s.muted}>학적 상태</Text>
                                   <View style={s.row}>
-                                    {['재학', '휴학', '졸업'].map((g) => (
+                                    {(
+                                      [
+                                        ['enrolled', '재학'],
+                                        ['leave', '휴학'],
+                                        ['other', '졸업'],
+                                      ] as const
+                                    ).map(([g, label]) => (
                                       <Button
                                         key={g}
-                                        label={g}
+                                        label={label}
                                         primary={status === g}
                                         onPress={() => setStatus(g)}
                                       />
@@ -1331,11 +1417,6 @@ export default function CampusApp() {
                                                 setDraft((old) =>
                                                   old.filter((v) => v !== k),
                                                 );
-                                                const nextKeys = keys.filter(
-                                                  (v) => v !== k,
-                                                );
-                                                setKeys(nextKeys);
-                                                setKeywords(nextKeys);
                                               } else {
                                                 setDraft((old) =>
                                                   old.includes(k)
@@ -1413,18 +1494,35 @@ export default function CampusApp() {
                                 <Button
                                   label="설정 저장"
                                   primary
-                                  onPress={() => {
+                                  onPress={async () => {
+                                    if (savingProfile.current) return;
                                     if (!draft.length) {
                                       setMessage(
                                         '선호 키워드를 하나 이상 선택해주세요.',
                                       );
                                       return;
                                     }
-                                    setKeys([...draft]);
-                                    setKeywords([...draft]);
-                                    setMessage(
-                                      '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
-                                    );
+                                    const next: CampusProfile = {
+                                      college,
+                                      department: dept.trim(),
+                                      grade,
+                                      enrollment: status,
+                                      keywords: draft,
+                                      customKeywords: customOptions,
+                                    };
+                                    savingProfile.current = true;
+                                    try {
+                                      await saveProfile(next);
+                                      setMessage(
+                                        '설정을 저장했어요. 맞춤 공지에 반영했습니다.',
+                                      );
+                                    } catch {
+                                      setMessage(
+                                        '설정을 저장하지 못했어요. 다시 시도해 주세요.',
+                                      );
+                                    } finally {
+                                      savingProfile.current = false;
+                                    }
                                   }}
                                 />
                                 {testNotification && (
@@ -1635,6 +1733,7 @@ const s = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: '#213e32', lineHeight: 38 },
   description: { fontSize: 14, lineHeight: 24, color: '#728174' },
   muted: { color: '#728174', fontSize: 12, lineHeight: 19 },
+  detailActions: { flexDirection: 'row', gap: 8 },
   keywordActions: { flexDirection: 'row', gap: 7 },
   customKeywords: {
     borderTopWidth: 1,

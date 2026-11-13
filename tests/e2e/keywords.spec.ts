@@ -41,3 +41,33 @@ test('사용자 키워드만 삭제 모드에서 삭제한다', async ({ page },
     page.getByRole('button', { name: '장학금', exact: true }),
   ).toHaveCount(1);
 });
+
+test('소속 단과대학과 내 정보 및 키워드가 새로고침 후에도 유지된다', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  const settings = page.getByRole('tab', { name: '설정', exact: true });
+  const college = page.getByRole('radio', {
+    name: '정보통신대학',
+    exact: true,
+  });
+  const department = page.getByRole('textbox', { name: '학과', exact: true });
+  await settings.click();
+  await college.click();
+  await department.fill('전자공학과');
+  await page.getByRole('textbox', { name: '직접 키워드 입력' }).fill('멘토링');
+  await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
+  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect(
+    page.getByText('설정을 저장했어요. 맞춤 공지에 반영했습니다.'),
+  ).toBeVisible();
+  await page.reload();
+  await settings.click();
+  await expect(college).toBeChecked();
+  await expect(department).toHaveValue('전자공학과');
+  await expect(
+    page.getByRole('button', { name: '멘토링', exact: true }),
+  ).toBeVisible();
+  await college.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('college-profile.png') });
+});
