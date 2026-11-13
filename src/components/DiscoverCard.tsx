@@ -1,4 +1,3 @@
-import { NoticeSheet } from './NoticeSheet';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
 import { useCardMotion } from './gestureMotion';
@@ -81,7 +80,7 @@ export default function DiscoverCard({
     );
   };
   const motion = useCardMotion(
-    !expanded && !busy,
+    !busy,
     touchLock.startDrag,
     (dx, dy) => {
       if (Math.abs(dx) >= 56) perform(dx > 0 ? 'select' : 'discard');
@@ -165,25 +164,9 @@ export default function DiscoverCard({
               </Pressable>
             ))}
           </View>
+          {expanded && detailContent}
         </Reanimated.View>
       </GestureDetector>
-      <NoticeSheet
-        visible={expanded}
-        title="공지 상세"
-        onClose={() => setExpanded(false)}
-      >
-        <Text style={styles.title}>{notice.title}</Text>
-        <Text style={styles.muted}>{notice.org}</Text>
-        <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
-        <Text style={styles.muted}>{notice.summary}</Text>
-        <Text style={styles.muted}>{eligibilityLabel}</Text>
-        <Text style={styles.muted}>
-          {notice.date
-            ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
-            : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
-        </Text>
-        {expanded && detailContent}
-      </NoticeSheet>
     </>
   );
 }

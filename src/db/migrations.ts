@@ -87,3 +87,8 @@ export const migration3 = `
   ALTER TABLE profile ADD COLUMN college TEXT;
   ALTER TABLE profile ADD COLUMN custom_keywords_json TEXT NOT NULL DEFAULT '[]';
 `;
+
+export const migration4 = `
+  ALTER TABLE user_notices ADD COLUMN permanently_deleted INTEGER NOT NULL DEFAULT 0
+    CHECK (permanently_deleted IN (0, 1));
+`;

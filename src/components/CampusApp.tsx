@@ -147,7 +147,7 @@ function SwipeCard({
     motion.reset();
   };
   const motion = useCardMotion(
-    !expanded,
+    true,
     () => {
       setDragging(true);
       touchLock.startDrag();
@@ -166,27 +166,31 @@ function SwipeCard({
               : 'select'
             : bucket === 'unseen'
               ? 'discard'
-              : 'none',
+              : 'delete',
         );
       else if (Math.abs(dy) >= 48) actRef.current('hold');
       reset();
     },
     reset,
+    bucket === 'saved' ? 'left' : bucket === 'dismissed' ? 'horizontal' : 'all',
   );
 
   return (
-    <GestureDetector gesture={motion.gesture}>
+    <GestureDetector
+      gesture={motion.gesture}
+      touchAction={bucket !== 'unseen' ? 'pan-y' : 'none'}
+    >
       <Reanimated.View
         style={[s.card, motion.style, dragging && s.draggingCard]}
       >
         <View style={s.between}>
           <Text style={[s.muted, { flexShrink: 1 }]}>{notice.org}</Text>
           <View style={s.noticeStatusTags}>
-            <Text style={s.tag}>
-              {notice.date
-                ? `${notice.date.slice(5).replace('-', '.')} 마감`
-                : '일정 미정'}
-            </Text>
+            {notice.date && (
+              <Text style={s.tag}>
+                {`${notice.date.slice(5).replace('-', '.')} 마감`}
+              </Text>
+            )}
             {bucket === 'saved' && (
               <Text
                 style={[
@@ -206,14 +210,6 @@ function SwipeCard({
               </Text>
             )}
           </View>
-          <Text style={s.muted}>{notice.org}</Text>
-          <Text style={s.tag}>
-            {notice.date
-              ? `${notice.date.slice(5).replace('-', '.')} 마감`
-              : notice.scheduleText
-                ? '추출 일정 있음'
-                : '일정 미정'}
-          </Text>
         </View>
         <Text style={s.cardTitle}>{notice.title}</Text>
         <Text style={s.muted}>
@@ -243,7 +239,11 @@ function SwipeCard({
               {bucket === 'unseen' && (
                 <Button label="← 버리기" onPress={() => act('discard')} />
               )}
-              <Button label="↕ 보류" onPress={() => act('hold')} />
+              {bucket === 'dismissed' ? (
+                <Button label="<-삭제" onPress={() => act('delete')} />
+              ) : (
+                <Button label="↕ 보류" onPress={() => act('hold')} />
+              )}
               <Button
                 label={bucket === 'dismissed' ? '복구 →' : '선택 →'}
                 primary
@@ -496,11 +496,12 @@ export default function CampusApp() {
       return true;
     }
     const write = {
+      delete: actions.deleteNotice,
       discard: actions.dismissNotice,
       select: actions.saveNotice,
       restore: actions.restoreNotice,
       unselect: actions.unsaveNotice,
-    }[action as 'discard' | 'select' | 'restore' | 'unselect'];
+    }[action as 'delete' | 'discard' | 'select' | 'restore' | 'unselect'];
     if (!write || changing.current) return false;
     changing.current = true;
     try {
@@ -515,6 +516,7 @@ export default function CampusApp() {
     setMessage(
       (
         {
+          delete: '공지를 영구 삭제했어요.',
           discard: '휴지통으로 옮겼어요.',
           select: '선택한 공지에 추가했어요.',
           restore: '맞춤 공지로 복구했어요.',

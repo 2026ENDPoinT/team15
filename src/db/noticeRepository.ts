@@ -15,7 +15,7 @@ import {
   describeDate,
   type ResolvedEvent,
 } from '../domain/dates';
-import { migration1, migration2, migration3 } from './migrations';
+import { migration1, migration2, migration3, migration4 } from './migrations';
 import type { CampusProfile } from '../domain/campusProfile';
 import type { CollectionResult } from '../sources/collector';
 
@@ -65,6 +65,7 @@ export interface NoticeRepository {
   saveNotice(noticeId: string): Promise<void>;
   dismissNotice(noticeId: string): Promise<void>;
   restoreNotice(noticeId: string): Promise<void>;
+  deleteNotice(noticeId: string): Promise<void>;
   unsaveNotice(noticeId: string): Promise<void>;
   setProgress(noticeId: string, progress: Progress): Promise<void>;
   setChecklistCompleted(itemId: string, completed: boolean): Promise<void>;
@@ -210,13 +211,14 @@ export async function createNoticeRepository(
       'PRAGMA user_version',
     );
     const current = version?.user_version;
-    if (current === 3) return;
-    if (current !== 0 && current !== 1 && current !== 2)
+    if (current === 4) return;
+    if (current !== 0 && current !== 1 && current !== 2 && current !== 3)
       throw new Error('Unsupported notice database version');
     if (current === 0) await db.execAsync(migration1);
     if (current < 2) await db.execAsync(migration2);
-    await db.execAsync(migration3);
-    await db.execAsync('PRAGMA user_version = 3');
+    if (current < 3) await db.execAsync(migration3);
+    await db.execAsync(migration4);
+    await db.execAsync('PRAGMA user_version = 4');
   });
 
   let pending = Promise.resolve();
@@ -344,6 +346,7 @@ export async function createNoticeRepository(
           n.analysis_status AS analysisStatus, n.last_error AS lastError,
           COALESCE(u.disposition, 'unseen') AS disposition, u.progress
           FROM notices n LEFT JOIN user_notices u ON u.notice_id = n.id
+          WHERE COALESCE(u.permanently_deleted, 0) = 0
           ORDER BY n.fetched_at DESC, n.id`);
         return rows.map(
           ({
@@ -597,11 +600,21 @@ export async function createNoticeRepository(
       });
     },
 
+    deleteNotice(noticeId) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `UPDATE user_notices SET permanently_deleted = 1, updated_at = ?
+           WHERE notice_id = ? AND disposition = 'dismissed'`,
+          [new Date().toISOString(), noticeId],
+        );
+      });
+    },
+
     restoreNotice(noticeId) {
       return enqueue(async () => {
         await db.runAsync(
           `UPDATE user_notices SET disposition = 'unseen', updated_at = ?
-           WHERE notice_id = ? AND disposition = 'dismissed'`,
+           WHERE notice_id = ? AND disposition = 'dismissed' AND permanently_deleted = 0`,
           [new Date().toISOString(), noticeId],
         );
       });
