@@ -245,13 +245,19 @@ export type AnalysisEnvelope = z.infer<typeof analysisEnvelopeSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type NoticeRef = z.infer<typeof noticeRefSchema>;
 export type CollectedNotice = z.infer<typeof collectedNoticeSchema>;
+// HTML 파싱은 순수 동기 함수이고, 수집 시각·비동기 SHA-256은 수집 서비스가 붙인다.
+export type ParsedNotice = Omit<CollectedNotice, 'fetchedAt' | 'contentHash'>;
+export interface ListPageContext {
+  html: string;
+  responseUrl: string;
+}
 
 export interface BoardAdapter {
   sourceId: SourceId;
   listUrl: string;
-  buildListUrl(page: number): string;
+  buildListUrl(page: number, previousPage?: ListPageContext): string;
   parseList(html: string, responseUrl: string): NoticeRef[];
-  parseDetail(html: string, ref: NoticeRef): CollectedNotice;
+  parseDetail(html: string, ref: NoticeRef): ParsedNotice;
 }
 
 // 구현은 B의 공통 서비스가 제공한다. 화면별로 저장 처리를 중복하지 않는다.

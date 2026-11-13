@@ -6,7 +6,7 @@ ENDPoinT 해커톤 2026 Team 15
 
 ## 1 현재 구현 범위
 
-홈·공지 찾기·상세가 같은 가상 공지를 표시한다. 관심 저장·해제, 신청 상태, 준비물 체크는 SQLite에 보관한다. 브라우저 새로고침 후 상태 유지를 확인했다. **Android 실기기 확인은 보류 중**이다. 실제 공지 수집과 기기 알림은 앱에 연결하기 전이다.
+main의 네 화면 UI(휴지통·맞춤 공지·메인·설정), SQLite repository와 T02의 두 게시판 수집 어댑터를 포함한다. 새 UI는 가상 공지 5건을 메모리 상태로 표시하며 SQLite 연결은 기존 데모 provider·상세 경로에 남아 있다. 새 UI의 상태 영속 연결은 후속 통합 범위다. 실제 수집은 별도의 개발 검증 화면과 CLI에서 실행한다. **T02 수집의 Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. 새 UI·SQLite 병합 후 실기기 검증은 별도로 필요하다. AI Worker, 실제 공지의 제품 화면 연결과 기기 알림 연결은 아직 구현하지 않았다.
 
 | 경로                     | 내용                                               |
 | ------------------------ | -------------------------------------------------- |
@@ -18,8 +18,14 @@ ENDPoinT 해커톤 2026 Team 15
 | `shared/mappers.ts`      | 수집 공지 → AI 요청 변환                           |
 | `fixtures/synthetic/`    | 가상 공지 5건, 오류 응답, 시연 프로필              |
 | `tests/*.test.ts`        | 계약·날짜 유효성·정규화·샘플 일관성 검증           |
+| `src/sources/`           | 두 게시판 목록·상세 파싱, 수집, 부분 실패 처리     |
+| `src/platform/sha256.ts` | Expo SHA-256 구현                                  |
+| `fixtures/real/`         | 출처·수집 시각·원본 해시가 있는 실제 HTML          |
+| `app/dev/collection.tsx` | 기기 수집·해시 검증 화면                           |
 
 [T01 팀 인계 및 실기기 체크리스트](docs/campus_notice_t01_handoff.md), [역할 C 착수 계획](docs/campus_notice_c_startup_plan.md), [샘플 사용법](fixtures/README.md)을 참고한다. 샘플은 실제 공지나 실제 AI 응답이 아니며, UI에도 가상 데이터임을 표시한다.
+
+[T02 수집 인계 및 기기 검증](docs/campus_notice_t02_handoff.md)에 어댑터 계약 변경, 실제 HTML 검증 결과와 실기기 확인 기록을 정리했다. 가상 샘플은 `fixtures/synthetic/`, 실제 원본은 `fixtures/real/`로 구분한다.
 
 ## 2 설치와 개발
 
@@ -32,7 +38,7 @@ npm ci
 npm run start
 ```
 
-SDK 58을 지원하는 Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 기존 SDK 57 작업 환경에서는 `npm ci` 후 `npm run start -- --clear`로 Metro 캐시를 초기화한다. SDK 버전이 맞지 않으면 [Expo Go 다운로드](https://expo.dev/go)에서 SDK 58용 앱을 확인한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 저장·해제는 현재 실행 중에만 유지된다.
+SDK 58을 지원하는 Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 기존 SDK 57 작업 환경에서는 `npm ci` 후 `npm run start -- --clear`로 Metro 캐시를 초기화한다. SDK 버전이 맞지 않으면 [Expo Go 다운로드](https://expo.dev/go)에서 SDK 58용 앱을 확인한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 새 네 화면 UI 상태는 실행 중에만 유지된다. 기존 데모 상세의 신청 상태·체크 기록은 SQLite에 저장하지만 새 UI와 아직 통합하지 않았다.
 
 ```sh
 npm run typecheck
@@ -60,6 +66,14 @@ npm run test:e2e
 ```
 
 `build:android`는 Android용 Metro/Hermes 번들만 생성하며 **설치 가능한 APK를 만들지 않는다**. Expo Go 실행과 독립 APK 제출은 구분한다. 웹 테스트도 실기기 확인을 대신하지 않는다. 출력은 `dist/`, UI 테스트 결과는 `test-results/`에 저장한다. Worker 배포 명령은 T05에서 추가한다.
+
+T02의 실제 서버 수집 확인(두 게시판 각각 목록 1·2페이지와 상세 1건, 네트워크 필요):
+
+```sh
+npm run collect:smoke
+```
+
+기기에서는 `npm run start`로 실행하고 **맞춤 공지 → T02 수집 검증 열기 → 두 게시판 수집 확인**을 누른다. 진입 버튼은 개발 모드에만 표시한다. 검증 화면은 `/dev/collection`이며 결과를 DB에 저장하지 않는다. 웹 통합 테스트는 실제 HTML fixture를 네트워크 응답으로 주입하므로 Android fetch·TLS·네이티브 해시 검증을 대신하지 않는다.
 
 ## 3 설정과 비밀 정보
 

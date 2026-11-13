@@ -1,4 +1,5 @@
 import { useRef, useState, type ComponentRef } from 'react';
+import { router } from 'expo-router';
 import {
   Modal,
   PanResponder,
@@ -514,6 +515,12 @@ export default function CampusApp() {
                 }}
               />
             </>
+          )}
+          {__DEV__ && page === 1 && (
+            <Button
+              label="T02 수집 검증 열기"
+              onPress={() => router.push('/dev/collection')}
+            />
           )}
           <Text style={s.muted}>
             가상 예시 공지입니다. 변경 내용은 앱 실행 중에만 유지되며, 실제
