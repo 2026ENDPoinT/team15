@@ -1,68 +1,79 @@
 import { expect, test } from '@playwright/test';
 
-const title = '[가상] AI 캠퍼스 해커톤 참가자 모집';
-
-test('같은 공지를 홈·찾기·상세에서 보고 관심 저장 상태를 공유한다', async ({
+test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결된다', async ({
   page,
 }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  // SDK 58 Router는 비활성 화면을 DOM에 남기고 inert로 상호작용을 막는다.
-  const activeElements = page.locator(':not([inert], [inert] *)');
-  const noticeLink = page
-    .getByRole('link', { name: `${title} 상세 보기`, exact: true })
-    .and(activeElements);
-  const unsaveButton = page
-    .getByRole('button', { name: '관심 해제', exact: true })
-    .and(activeElements);
   await page.goto('/');
-  await expect(page.getByText('저장한 공지', { exact: true })).toBeVisible();
-  await expect(noticeLink).toBeVisible();
+  await expect(page.getByText('선택한 기회를 한눈에')).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('home.png'),
     fullPage: true,
   });
-
-  await page.getByRole('tab', { name: '공지 찾기' }).click();
-  await expect(noticeLink).toBeVisible();
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  const scholarship = page.getByText('2026학년도 2학기 장학금 신청 안내', {
+    exact: true,
+  });
+  await expect(scholarship).toBeVisible();
+  await page
+    .getByRole('button', { name: '↕ 보류', exact: true })
+    .first()
+    .click();
+  await expect(scholarship).toHaveCount(0);
+  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  await expect(scholarship).toBeVisible();
+  await page
+    .getByRole('button', { name: '← 버리기', exact: true })
+    .first()
+    .click();
+  await page.getByRole('tab', { name: '휴지통', exact: true }).click();
+  await expect(scholarship).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath('trash.png'),
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: '복구 →', exact: true })
+    .last()
+    .click();
+  await expect(scholarship).toHaveCount(0);
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  await page
+    .getByRole('button', { name: '선택 →', exact: true })
+    .first()
+    .click();
+  await page.getByRole('tab', { name: '메인', exact: true }).click();
+  await expect(scholarship).toBeVisible();
+  await page
+    .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
+    .first()
+    .click();
+  await page.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.getByRole('tab', { name: '설정', exact: true }).click();
+  await page.getByRole('button', { name: '대회', exact: true }).click();
+  await page.getByRole('button', { name: '장학금', exact: true }).click();
+  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect(
+    page.getByText('선호 키워드를 하나 이상 선택해주세요.'),
+  ).toBeVisible();
+  await page
+    .getByRole('textbox', { name: '직접 키워드 입력', exact: true })
+    .fill('인공지능');
+  await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
+  await page.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await page.screenshot({
+    path: testInfo.outputPath('settings.png'),
+    fullPage: true,
+  });
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  await expect(
+    page.getByText('학부생 AI 연구 프로젝트 참여자 추가 모집', { exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('discover.png'),
     fullPage: true,
   });
-  await unsaveButton.click();
-  await expect(
-    page.getByRole('button', { name: '관심 저장', exact: true }),
-  ).toBeVisible();
-
-  await page.getByRole('tab', { name: '홈', exact: true }).click();
-  await expect(page.getByText('아직 저장한 공지가 없어요')).toBeVisible();
-  await page.getByRole('button', { name: '공지 찾으러 가기' }).click();
-  await page.getByRole('button', { name: '관심 저장', exact: true }).click();
-  await page.getByRole('tab', { name: '홈', exact: true }).click();
-  await expect(noticeLink).toBeVisible();
-
-  await noticeLink.click();
-  await expect(page.getByText('어떤 활동인가요?')).toBeVisible();
-  await expect(page.getByText('• 참가 신청서 준비')).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath('detail.png'),
-    fullPage: true,
-  });
-  await unsaveButton.click();
-  await page.getByRole('button', { name: '뒤로 가기' }).click();
-  await expect(page.getByText('아직 저장한 공지가 없어요')).toBeVisible();
-
-  // T01의 메모리 상태는 실행을 새로 시작하면 초기 샘플로 복원된다.
-  await page.reload();
-  await expect(noticeLink).toBeVisible();
   expect(errors).toEqual([]);
-});
-
-test('직접 연 잘못된 공지 ID에서 홈으로 복귀할 수 있다', async ({ page }) => {
-  await page.goto('/notice/missing');
-  await expect(page.getByText('공지를 찾을 수 없어요')).toBeVisible();
-  await page.getByRole('button', { name: '홈으로 이동' }).click();
-  await expect(
-    page.getByRole('link', { name: `${title} 상세 보기`, exact: true }),
-  ).toBeVisible();
 });
