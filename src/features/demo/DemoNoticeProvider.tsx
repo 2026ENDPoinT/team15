@@ -305,6 +305,7 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
   const [hasAnalysisAccess, setHasAnalysisAccess] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     phase: 'idle',
+    analysisBlocked: false,
     message: null,
     analysisRetryAt: null,
   });

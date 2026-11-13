@@ -934,7 +934,7 @@ export default function CampusApp() {
                             <Button
                               label={
                                 syncStatus.phase === 'idle'
-                                  ? '실제 공지 새로고침'
+                                  ? '공지 새로고침'
                                   : '공지 갱신 중…'
                               }
                               disabled={syncStatus.phase !== 'idle'}
@@ -961,7 +961,11 @@ export default function CampusApp() {
                                 ? '원문 수집 중 · 분석이 완료되면 공지를 표시해요.'
                                 : syncStatus.phase === 'analyzing'
                                   ? 'AI 분석 중 · 완료된 공지부터 표시해요.'
-                                  : '공지 갱신 대기 중'}
+                                  : analysisProgress.waiting +
+                                        analysisProgress.failed >
+                                      0
+                                    ? '공지 갱신이 멈췄어요. 아래 안내를 확인해 주세요.'
+                                    : '공지 갱신 대기 중'}
                             </Text>
                             {analysisProgress.total > 0 && (
                               <View testID="analysis-progress" style={s.card}>
@@ -1007,10 +1011,16 @@ export default function CampusApp() {
                                 {analysisProgress.waiting +
                                   analysisProgress.failed >
                                   0 &&
-                                  (hasAnalysisAccess ? (
+                                  syncStatus.phase === 'idle' &&
+                                  (hasAnalysisAccess &&
+                                  !syncStatus.analysisBlocked ? (
                                     <Button
-                                      label="남은 공지 분석"
-                                      disabled={syncStatus.phase !== 'idle'}
+                                      label="다시 시도"
+                                      disabled={
+                                        !!syncStatus.analysisRetryAt &&
+                                        Date.parse(syncStatus.analysisRetryAt) >
+                                          Date.now()
+                                      }
                                       onPress={() =>
                                         void analyzePendingNotices()
                                       }
