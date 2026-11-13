@@ -9,7 +9,8 @@ import {
   SCHEMA_VERSION,
 } from '../../shared/contracts';
 import { hashNoticeContent } from '../../shared/canonicalize';
-import { analyzeNotice } from './analyze';
+import { analysisCacheKey, generateAnalysis } from './analysisCache';
+export { AnalysisCache } from './analysisCache';
 import {
   ApiFailure,
   failureResponse,
@@ -116,8 +117,6 @@ export function createWorker(overrides: Partial<WorkerDependencies> = {}) {
           !env.ANALYZE_RATE_LIMITER
         )
           throw new ApiFailure('PROVIDER_UNAVAILABLE');
-        if (!(await env.ANALYZE_RATE_LIMITER.limit({ key: tokenId })).success)
-          throw new ApiFailure('RATE_LIMITED', 60);
         const length = request.headers.get('Content-Length');
         if (length !== null && Number(length) > MAX_REQUEST_BYTES)
           throw new ApiFailure('INPUT_TOO_LARGE');
@@ -147,16 +146,43 @@ export function createWorker(overrides: Partial<WorkerDependencies> = {}) {
         log.notice_id = input.notice_id.slice(0, 200);
         if ((await hashNoticeContent(input, sha256)) !== input.content_hash)
           throw new ApiFailure('INVALID_INPUT');
-        const result = await analyzeNotice(input, env, deps);
+        let result: Awaited<ReturnType<typeof generateAnalysis>>;
+        if (env.ANALYSIS_CACHE) {
+          const key = await analysisCacheKey(input, env.GEMINI_MODEL);
+          // Worker placement does not place Durable Objects. Avoid the HKG
+          // provider-location failure previously observed by this project.
+          const namespace =
+            env.ANALYSIS_CACHE_JURISDICTION === 'local'
+              ? env.ANALYSIS_CACHE
+              : env.ANALYSIS_CACHE.jurisdiction('eu');
+          const cached = await namespace.get(namespace.idFromName(key)).fetch(
+            new Request('https://analysis-cache.internal/', {
+              method: 'POST',
+              body: JSON.stringify({ input, tokenId }),
+            }),
+          );
+          if (!cached.ok) {
+            const failure = (await cached.json()) as {
+              code: ApiFailure['code'];
+              retryAfter: number | null;
+              providerStatus: number | null;
+              providerReason: string | null;
+            };
+            throw new ApiFailure(
+              failure.code,
+              failure.retryAfter,
+              cached.status,
+              failure.providerStatus,
+              failure.providerReason,
+            );
+          }
+          result = (await cached.json()) as typeof result;
+        } else {
+          // Binding-free unit tests and explicitly unconfigured local Workers.
+          result = await generateAnalysis(input, tokenId, env, deps);
+        }
         log.total_tokens = result.totalTokens;
-        const envelope = analysisEnvelopeSchema.parse({
-          notice_id: input.notice_id,
-          content_hash: input.content_hash,
-          schema_version: SCHEMA_VERSION,
-          extractor_version: EXTRACTOR_VERSION,
-          analyzed_at: deps.now().toISOString(),
-          data: result.data,
-        });
+        const envelope = analysisEnvelopeSchema.parse(result.envelope);
         response = jsonResponse(envelope);
       } catch (error) {
         const failure =

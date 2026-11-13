@@ -2,5 +2,7 @@
 GEMINI_API_KEY=""
 # 계정에서 generateContent와 JSON 구조화 출력을 지원하는 모델 ID
 GEMINI_MODEL="gemini-3.5-flash-lite"
+# 로컬 workerd는 jurisdiction을 지원하지 않는다. 운영 vars는 eu를 유지한다.
+ANALYSIS_CACHE_JURISDICTION="local"
 DEMO_TOKEN_SHA256=""
 DEMO_TOKEN_EXPIRES_AT=""

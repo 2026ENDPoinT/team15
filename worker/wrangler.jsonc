@@ -4,12 +4,19 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-10",
   "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "ANALYSIS_CACHE", "class_name": "AnalysisCache" }],
+  },
+  "migrations": [
+    { "tag": "v1-analysis-cache", "new_sqlite_classes": ["AnalysisCache"] },
+  ],
   // 기본 HKG 실행에서 Gemini UNSUPPORTED_LOCATION을 확인했다. 지원 지역인 서울 인근에 배치한다.
   "placement": { "region": "gcp:asia-northeast3" },
   "vars": {
     // 2026-11-13 실제 두 본문으로 검증한 e1 모델. 변경 시 extractor 버전도 갱신한다.
     "GEMINI_MODEL": "gemini-3.5-flash-lite",
     "ANALYSIS_ENABLED": "true",
+    "ANALYSIS_CACHE_JURISDICTION": "eu",
   },
   "ratelimits": [
     {
