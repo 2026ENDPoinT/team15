@@ -9,6 +9,8 @@ export type Notice = {
   date: string | null;
   time: string | null;
   summary: string;
+  synthetic?: boolean;
+  analysisLabel?: string;
 };
 export const notices: Notice[] = [
   {
