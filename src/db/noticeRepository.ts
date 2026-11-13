@@ -21,6 +21,7 @@ import {
   migration3,
   migration4,
   migration5,
+  migration6,
 } from './migrations';
 import type { CampusProfile } from '../domain/campusProfile';
 import type { CollectionResult } from '../sources/collector';
@@ -74,7 +75,10 @@ export interface NoticeRepository {
   restoreNotice(noticeId: string): Promise<void>;
   deleteNotice(noticeId: string): Promise<void>;
   unsaveNotice(noticeId: string): Promise<void>;
+  setNoticeMemo(noticeId: string, memo: string): Promise<void>;
   setProgress(noticeId: string, progress: Progress): Promise<void>;
+  addChecklistItem(noticeId: string, text: string): Promise<void>;
+  deleteChecklistItem(itemId: string): Promise<void>;
   setChecklistCompleted(itemId: string, completed: boolean): Promise<void>;
   getChecklist(noticeId: string): Promise<{
     items: ChecklistItem[];
@@ -125,6 +129,7 @@ export interface ReminderRecord {
 }
 
 export interface NoticeDetail {
+  memo: string;
   id: string;
   title: string;
   sourceId: SourceId;
@@ -218,29 +223,33 @@ export async function createNoticeRepository(
       'PRAGMA user_version',
     );
     const current = version?.user_version;
-    if (current === 5) return;
+    if (current === 6) return;
     if (
       current !== 0 &&
       current !== 1 &&
       current !== 2 &&
       current !== 3 &&
-      current !== 4
+      current !== 4 &&
+      current !== 5
     )
       throw new Error('Unsupported notice database version');
     if (current === 0) await db.execAsync(migration1);
     if (current < 2) await db.execAsync(migration2);
     if (current < 3) await db.execAsync(migration3);
     if (current < 4) await db.execAsync(migration4);
-    await db.execAsync(migration5);
-    const rows = await db.getAllAsync<AnalysisColumns>(
-      `SELECT analysis_json AS analysisJson, content_hash AS contentHash FROM notices`,
-    );
-    for (const row of rows) {
-      const analysis = readAnalysis(row.analysisJson);
-      if (isFresh(analysis, row.contentHash))
-        await storeKeywords(analysis.data.tags);
+    if (current < 5) {
+      await db.execAsync(migration5);
+      const rows = await db.getAllAsync<AnalysisColumns>(
+        `SELECT analysis_json AS analysisJson, content_hash AS contentHash FROM notices`,
+      );
+      for (const row of rows) {
+        const analysis = readAnalysis(row.analysisJson);
+        if (isFresh(analysis, row.contentHash))
+          await storeKeywords(analysis.data.tags);
+      }
     }
-    await db.execAsync('PRAGMA user_version = 5');
+    await db.execAsync(migration6);
+    await db.execAsync('PRAGMA user_version = 6');
   });
 
   async function storeKeywords(tags: string[]) {
@@ -673,6 +682,16 @@ export async function createNoticeRepository(
       });
     },
 
+    setNoticeMemo(noticeId, memo) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `UPDATE user_notices SET memo = ?, updated_at = ?
+           WHERE notice_id = ? AND disposition = 'saved'`,
+          [memo, new Date().toISOString(), noticeId],
+        );
+      });
+    },
+
     setProgress(noticeId, progress) {
       return enqueue(async () => {
         await db.runAsync(
@@ -680,6 +699,31 @@ export async function createNoticeRepository(
            SET progress = ?, updated_at = ?
            WHERE notice_id = ? AND disposition = 'saved' AND progress <> ?`,
           [progress, new Date().toISOString(), noticeId, progress],
+        );
+      });
+    },
+
+    addChecklistItem(noticeId, text) {
+      return enqueue(async () => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        await db.runAsync(
+          `INSERT INTO checklist_items (id, notice_id, text, evidence, created_at)
+           SELECT ?, notice_id, ?, '', ? FROM user_notices
+           WHERE notice_id = ? AND disposition = 'saved'`,
+          [crypto.randomUUID(), trimmed, new Date().toISOString(), noticeId],
+        );
+      });
+    },
+
+    deleteChecklistItem(itemId) {
+      return enqueue(async () => {
+        await db.runAsync(
+          `DELETE FROM checklist_items WHERE id = ? AND EXISTS (
+             SELECT 1 FROM user_notices u
+             WHERE u.notice_id = checklist_items.notice_id AND u.disposition = 'saved'
+           )`,
+          [itemId],
         );
       });
     },
@@ -786,6 +830,7 @@ export async function createNoticeRepository(
           `SELECT n.id, n.title, n.source_id AS sourceId, n.source_url AS sourceUrl,
                   n.analysis_status AS analysisStatus, n.last_error AS lastError,
                   COALESCE(u.disposition, 'unseen') AS disposition, u.progress,
+                  COALESCE(u.memo, '') AS memo,
                   n.raw_json AS rawJson, n.published_date AS publishedDate,
                   u.deadline_baseline_hash AS deadlineBaseline,
                   ${analysisColumns}

@@ -1,3 +1,7 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { NoticeDetailModal } from './NoticeDetailModal';
+import { NoticeMemoEditor } from './NoticeMemoEditor';
+import { ChecklistEditor } from './ChecklistEditor';
 import { CampusButton } from './CampusButton';
 import { campusStyles as s } from './campusStyles';
 import { NoticeCalendar } from './NoticeCalendar';
@@ -94,6 +98,12 @@ function DetailOnOpen({
   return <>{children}</>;
 }
 const names = ['휴지통', '맞춤 공지', '메인', '설정'];
+const tabIcons = [
+  ['trash-outline', 'trash'],
+  ['compass-outline', 'compass'],
+  ['home-outline', 'home'],
+  ['settings-outline', 'settings'],
+] as const;
 function SwipeCard({
   notice,
   bucket,
@@ -124,7 +134,7 @@ function SwipeCard({
     motion.reset();
   };
   const motion = useCardMotion(
-    true,
+    !expanded,
     () => {
       setDragging(true);
       touchLock.startDrag();
@@ -195,11 +205,9 @@ function SwipeCard({
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             aria-expanded={expanded}
-            onPress={() => setExpanded((old) => !old)}
+            onPress={() => setExpanded(true)}
           >
-            <Text style={cardStyles.link}>
-              {expanded ? '상세 접기 ∧' : '공지 자세히 보기 ∨'}
-            </Text>
+            <Text style={cardStyles.link}>공지 자세히 보기 ↗</Text>
           </Pressable>
           <NoticeSourceButton notice={notice} />
         </View>
@@ -243,9 +251,13 @@ function SwipeCard({
             </>
           )}
         </View>
-        {expanded && (
-          <View style={cardStyles.listDetails}>{detailContent}</View>
-        )}
+        <NoticeDetailModal
+          notice={notice}
+          visible={expanded}
+          onClose={() => setExpanded(false)}
+        >
+          {detailContent}
+        </NoticeDetailModal>
       </Reanimated.View>
     </GestureDetector>
   );
@@ -813,44 +825,37 @@ export default function CampusApp() {
                   />
                 </>
               )}
+              <NoticeMemoEditor
+                key={notice.id}
+                memo={selectedDetail.memo}
+                disabled={detailUpdating}
+                onSave={(memo, onSaved) =>
+                  updateDetail(notice.id, async () => {
+                    await actions.setNoticeMemo(notice.id, memo);
+                    onSaved();
+                  })
+                }
+              />
               <Text style={s.section}>신청·제출 체크리스트</Text>
-              {selectedChecklist?.updatedChecklist && (
-                <Text style={s.reason}>
-                  체크리스트가 변경되었어요. 기존 체크 기록은 유지합니다. 새
-                  목록:{' '}
-                  {selectedChecklist.updatedChecklist
-                    .map(({ text }) => text)
-                    .join(', ')}
-                </Text>
-              )}
 
-              {selectedChecklist?.items.length ? (
-                selectedChecklist.items.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={item.text}
-                    accessibilityState={{
-                      checked: item.completed,
-                      disabled: detailUpdating,
-                    }}
-                    disabled={detailUpdating}
-                    aria-checked={item.completed}
-                    style={[s.button, item.completed && s.checkedItem]}
-                    onPress={() =>
-                      void updateDetail(notice.id, () =>
-                        actions.setChecklistCompleted(item.id, !item.completed),
-                      )
-                    }
-                  >
-                    <Text
-                      style={s.buttonText}
-                    >{`${item.completed ? '☑' : '☐'} ${item.text}`}</Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={s.muted}>확인된 신청·제출 항목이 없어요.</Text>
-              )}
+              <ChecklistEditor
+                items={selectedChecklist?.items ?? []}
+                disabled={detailUpdating}
+                onToggle={(item) =>
+                  updateDetail(notice.id, () =>
+                    actions.setChecklistCompleted(item.id, !item.completed),
+                  )
+                }
+                onDelete={(id) =>
+                  updateDetail(notice.id, () => actions.deleteChecklistItem(id))
+                }
+                onAdd={(text, onSaved) =>
+                  updateDetail(notice.id, async () => {
+                    await actions.addChecklistItem(notice.id, text);
+                    onSaved();
+                  })
+                }
+              />
             </>
           )}
         </View>
@@ -1574,11 +1579,17 @@ export default function CampusApp() {
               disabled: pageTransitioning,
             }}
             disabled={pageTransitioning}
-
             onPress={() => navigate(i)}
             style={[s.navItem, page === i && s.primary]}
           >
-            <Text style={[s.buttonText, page === i && s.light]}>{name}</Text>
+            <Ionicons
+              name={tabIcons[i]![page === i ? 1 : 0]}
+              size={22}
+              color={page === i ? '#fff' : '#28634d'}
+              accessible={false}
+              aria-hidden
+            />
+            <Text style={[s.navLabel, page === i && s.light]}>{name}</Text>
           </Pressable>
         ))}
       </View>

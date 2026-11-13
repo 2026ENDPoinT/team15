@@ -294,7 +294,10 @@ type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
     | 'saveNotice'
     | 'unsaveNotice'
     | 'dismissNotice'
+    | 'setNoticeMemo'
     | 'setProgress'
+    | 'addChecklistItem'
+    | 'deleteChecklistItem'
     | 'setChecklistCompleted'
     | 'acknowledgeDeadlineChange'
   > & {
@@ -453,6 +456,12 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       });
       void reloadState(repository).catch(() => undefined);
     },
+    setNoticeMemo: (id, memo) =>
+      update((actions) => actions.setNoticeMemo(id, memo)),
+    addChecklistItem: (id, text) =>
+      update((actions) => actions.addChecklistItem(id, text)),
+    deleteChecklistItem: (id) =>
+      update((actions) => actions.deleteChecklistItem(id)),
     setChecklistCompleted: (id, completed) =>
       update((actions) => actions.setChecklistCompleted(id, completed)),
     acknowledgeDeadlineChange: (id) =>

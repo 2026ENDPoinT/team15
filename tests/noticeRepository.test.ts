@@ -391,7 +391,9 @@ test('version four migration imports existing fresh analysis tags', async () => 
     const { notice, analysis } = normalNoticeFixture;
     await repository.upsertRawNotice(notice);
     await repository.applyAnalysis(analysis);
-    db.exec('DROP TABLE discovered_keywords; PRAGMA user_version = 4;');
+    db.exec(
+      'DROP TABLE discovered_keywords; ALTER TABLE user_notices DROP COLUMN memo; PRAGMA user_version = 4;',
+    );
     const migrated = await openRepository(db);
     assert.deepEqual(await migrated.listDiscoveredKeywords(), [
       ...new Set(analysis.data.tags.map((tag) => tag.trim())),
@@ -497,5 +499,105 @@ test('기존 가상 공지만 제거하고 실제 공지·체크를 보존하며
     assert.deepEqual(canceled, ['old-synthetic-reminder']);
   } finally {
     db.close();
+  }
+});
+
+test('사용자 체크리스트 추가·삭제는 재분석과 DB 재연결 후에도 유지된다', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'checklist-edit-'));
+  const path = join(directory, 'notices.sqlite');
+  let db = new DatabaseSync(path);
+  try {
+    let repository = await openRepository(db);
+    const actions = createNoticeActions(repository);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    await actions.saveNotice(notice.id);
+    const original = (await repository.getChecklist(notice.id)).items;
+    await actions.addChecklistItem(notice.id, '   ');
+    assert.deepEqual(
+      (await repository.getChecklist(notice.id)).items,
+      original,
+    );
+    await actions.addChecklistItem(notice.id, '  제출 확인하기  ');
+    const added = (await repository.getChecklist(notice.id)).items.at(-1)!;
+    assert.equal(added.text, '제출 확인하기');
+    assert.equal(added.completed, false);
+    await actions.setChecklistCompleted(added.id, true);
+    await actions.deleteChecklistItem(original[0]!.id);
+    await repository.upsertRawNotice(changedNoticeFixture.notice);
+    await repository.applyAnalysis(changedNoticeFixture.analysis);
+    db.close();
+    db = new DatabaseSync(path);
+    repository = await openRepository(db);
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, [
+      ...original.slice(1),
+      { ...added, completed: true },
+    ]);
+    for (const item of (await repository.getChecklist(notice.id)).items) {
+      await repository.deleteChecklistItem(item.id);
+    }
+    await repository.applyAnalysis(changedNoticeFixture.analysis);
+    await repository.saveNotice(notice.id);
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, []);
+    await repository.dismissNotice(notice.id);
+    await repository.addChecklistItem(notice.id, '저장하지 않은 공지');
+    assert.deepEqual((await repository.getChecklist(notice.id)).items, []);
+  } finally {
+    db.close();
+    unlinkSync(path);
+    rmdirSync(directory);
+  }
+});
+
+test('기존 DB를 업그레이드하고 공지별 메모를 재분석·재연결 후에도 보존한다', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'notice-memo-'));
+  const path = join(directory, 'notices.sqlite');
+  let db = new DatabaseSync(path);
+  try {
+    let repository = await openRepository(db);
+    const { notice, analysis } = normalNoticeFixture;
+    const other = { ...notice, id: 'memo-other', postId: 'memo-other' };
+    await repository.upsertRawNotice(notice);
+    await repository.upsertRawNotice(other);
+    await repository.applyAnalysis(analysis);
+    await repository.saveNotice(notice.id);
+    await repository.saveNotice(other.id);
+    db.exec(
+      'ALTER TABLE user_notices DROP COLUMN memo; PRAGMA user_version = 5;',
+    );
+    repository = await openRepository(db);
+    assert.equal((await repository.getNoticeDetail(notice.id))?.memo, '');
+    const actions = createNoticeActions(repository);
+    await actions.setNoticeMemo(notice.id, '준비할 것\n신청서 확인');
+    await actions.setNoticeMemo(other.id, '다른 공지의 메모');
+    await repository.upsertRawNotice(changedNoticeFixture.notice);
+    await repository.applyAnalysis(changedNoticeFixture.analysis);
+    db.close();
+    db = new DatabaseSync(path);
+    repository = await openRepository(db);
+    assert.equal(
+      (await repository.getNoticeDetail(notice.id))?.memo,
+      '준비할 것\n신청서 확인',
+    );
+    assert.equal(
+      (await repository.getNoticeDetail(other.id))?.memo,
+      '다른 공지의 메모',
+    );
+    await repository.setNoticeMemo(notice.id, '수정한 메모');
+    assert.equal(
+      (await repository.getNoticeDetail(notice.id))?.memo,
+      '수정한 메모',
+    );
+    await repository.setNoticeMemo(notice.id, '');
+    assert.equal((await repository.getNoticeDetail(notice.id))?.memo, '');
+    assert.equal(
+      (await repository.getNoticeDetail(other.id))?.memo,
+      '다른 공지의 메모',
+    );
+  } finally {
+    db.close();
+    unlinkSync(path);
+    rmdirSync(directory);
   }
 });

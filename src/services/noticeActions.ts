@@ -9,7 +9,10 @@ export function createNoticeActions(
   | 'saveNotice'
   | 'dismissNotice'
   | 'unsaveNotice'
+  | 'setNoticeMemo'
   | 'setProgress'
+  | 'addChecklistItem'
+  | 'deleteChecklistItem'
   | 'setChecklistCompleted'
   | 'acknowledgeDeadlineChange'
   | 'reconcileReminders'
@@ -30,8 +33,17 @@ export function createNoticeActions(
     unsaveNotice(noticeId) {
       return syncAfter(repository.unsaveNotice(noticeId));
     },
+    setNoticeMemo(noticeId, memo) {
+      return repository.setNoticeMemo(noticeId, memo);
+    },
     setProgress(noticeId, progress) {
       return syncAfter(repository.setProgress(noticeId, progress));
+    },
+    addChecklistItem(noticeId, text) {
+      return repository.addChecklistItem(noticeId, text);
+    },
+    deleteChecklistItem(itemId) {
+      return repository.deleteChecklistItem(itemId);
     },
     setChecklistCompleted(itemId, completed) {
       return repository.setChecklistCompleted(itemId, completed);

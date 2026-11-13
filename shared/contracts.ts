@@ -293,7 +293,10 @@ export interface NoticeActions {
   saveNotice(noticeId: string): Promise<void>;
   dismissNotice(noticeId: string): Promise<void>;
   unsaveNotice(noticeId: string): Promise<void>;
+  setNoticeMemo(noticeId: string, memo: string): Promise<void>;
   setProgress(noticeId: string, progress: Progress): Promise<void>;
+  addChecklistItem(noticeId: string, text: string): Promise<void>;
+  deleteChecklistItem(itemId: string): Promise<void>;
   setChecklistCompleted(itemId: string, completed: boolean): Promise<void>;
   acknowledgeDeadlineChange(noticeId: string): Promise<void>;
   refreshNotices(reason: 'launch' | 'foreground' | 'manual'): Promise<void>;
