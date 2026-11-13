@@ -60,6 +60,16 @@ export function createNoticeSync(options: {
   async function reconcile() {
     try {
       await options.reconcileReminders?.();
+      if (
+        (await repository.listReminders()).some(
+          ({ state }) => state === 'error',
+        )
+      ) {
+        publish({
+          message:
+            '알림 변경을 완료하지 못했어요. 다음 갱신에서 다시 확인합니다.',
+        });
+      }
     } catch {
       publish({
         message:

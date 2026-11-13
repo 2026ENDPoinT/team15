@@ -69,6 +69,8 @@ npm run test:e2e
 
 `build:android`는 Android용 Metro/Hermes 번들만 생성하며 **설치 가능한 APK를 만들지 않는다**. Expo Go 실행과 독립 APK 제출은 구분한다. 웹 테스트도 실기기 확인을 대신하지 않는다. 출력은 `dist/`, UI 테스트 결과는 `test-results/`에 저장한다. Worker 실행·배포는 4절을 따른다.
 
+T09 변경·실패·알림 재조정은 `npm run test:t09`로 검증한다. 실제 정상 공지 후보 수집은 `npm run t09:candidates`, 선정 공지의 배포 AI 1회·SQLite 검증은 `npm run t09:live-smoke`를 사용한다. Android에서는 개발 앱의 **맞춤 공지 → T09 변경·알림 검증 열기**로 가상 변경·실패와 실제 OS 예약을 확인한다. [T09 검증 기록과 기기 인수 절차](docs/campus_notice_t09_handoff.md)를 따른다.
+
 T02의 실제 서버 수집 확인(두 게시판 각각 목록 1·2페이지와 상세 1건, 네트워크 필요):
 
 ```sh

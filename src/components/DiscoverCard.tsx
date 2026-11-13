@@ -15,11 +15,13 @@ type Action = 'discard' | 'hold' | 'select';
 export default function DiscoverCard({
   notice,
   detailContent,
+  eligibilityLabel,
   act,
   onDragging,
 }: {
   notice: Notice;
   detailContent: ReactNode;
+  eligibilityLabel: string;
   act: (action: Action) => Promise<boolean>;
   onDragging: (dragging: boolean) => void;
 }) {
@@ -134,11 +136,17 @@ export default function DiscoverCard({
         <Text accessibilityRole="header" style={styles.title}>
           {notice.title}
         </Text>
+        <Text style={styles.muted}>
+          {notice.synthetic
+            ? '가상 예시'
+            : `실제 공지 · ${notice.analysisLabel}`}
+        </Text>
         <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
         <Text style={styles.summary}>{notice.summary}</Text>
+        <Text style={styles.muted}>{eligibilityLabel}</Text>
         <Text style={styles.muted}>
           {notice.date
-            ? `${notice.date} · ${notice.time} KST 마감`
+            ? `${notice.date} · ${notice.time ? `${notice.time} KST` : '시각 미확인'} 마감`
             : '정확한 일정은 원문에서 확인'}
         </Text>
         {expanded && detailContent}

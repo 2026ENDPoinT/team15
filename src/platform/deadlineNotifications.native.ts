@@ -31,53 +31,63 @@ async function prepareChannel() {
   }
 }
 
-export const deadlineNotifications: ReminderPlatform = {
-  async isAllowed() {
-    const permission = await Notifications.getPermissionsAsync();
-    return permission.granted;
-  },
-  async listScheduled() {
-    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    return scheduled.flatMap(({ identifier, content: { data } }) => {
-      if (
-        data?.kind !== notificationKind ||
-        typeof data.key !== 'string' ||
-        typeof data.noticeId !== 'string' ||
-        typeof data.fireAt !== 'string'
-      )
-        return [];
-      return [
-        {
-          identifier,
-          key: data.key,
-          noticeId: data.noticeId,
-          fireAt: data.fireAt,
+function createDeadlineNotifications(kind: string): ReminderPlatform {
+  return {
+    async isAllowed() {
+      const permission = await Notifications.getPermissionsAsync();
+      return permission.granted;
+    },
+    async listScheduled() {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      return scheduled.flatMap(({ identifier, content: { data } }) => {
+        if (
+          data?.kind !== kind ||
+          typeof data.key !== 'string' ||
+          typeof data.noticeId !== 'string' ||
+          typeof data.fireAt !== 'string'
+        )
+          return [];
+        return [
+          {
+            identifier,
+            key: data.key,
+            noticeId: data.noticeId,
+            fireAt: data.fireAt,
+          },
+        ];
+      });
+    },
+    cancel: Notifications.cancelScheduledNotificationAsync,
+    async schedule({ key, noticeId, fireAt }) {
+      const demo =
+        noticeId === normalNoticeFixture.notice.id || kind !== notificationKind;
+      if (!demo) await prepareChannel();
+      return Notifications.scheduleNotificationAsync({
+        content: {
+          title: demo
+            ? '테스트 · 공지 마감 알림'
+            : '저장한 공지의 신청 마감이 내일이에요',
+          body: demo
+            ? '가상 공지의 예약 동작을 확인하는 알림입니다.'
+            : '앱에서 마감과 준비물을 확인하세요.',
+          data: { kind, key, noticeId, fireAt },
         },
-      ];
-    });
-  },
-  cancel: Notifications.cancelScheduledNotificationAsync,
-  async schedule({ key, noticeId, fireAt }) {
-    const demo = noticeId === normalNoticeFixture.notice.id;
-    if (!demo) await prepareChannel();
-    return Notifications.scheduleNotificationAsync({
-      content: {
-        title: demo
-          ? '테스트 · 공지 마감 알림'
-          : '저장한 공지의 신청 마감이 내일이에요',
-        body: demo
-          ? '가상 공지의 예약 동작을 확인하는 알림입니다.'
-          : '앱에서 마감과 준비물을 확인하세요.',
-        data: { kind: notificationKind, key, noticeId, fireAt },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: new Date(fireAt),
-        ...(demo ? {} : channel),
-      },
-    });
-  },
-};
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(fireAt),
+          ...(demo ? {} : channel),
+        },
+      });
+    },
+  };
+}
+
+export const deadlineNotifications =
+  createDeadlineNotifications(notificationKind);
+// Same native adapter, separate tag: product reconciliation cannot cancel verification reservations.
+export const verificationNotifications = createDeadlineNotifications(
+  't09-verification-v1',
+);
 
 export async function scheduleTestNotification(): Promise<boolean> {
   // The delivery test uses the host app's default channel.
