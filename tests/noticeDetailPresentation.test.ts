@@ -2,11 +2,29 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detailReviewNotes,
+  confirmedDetailReviewNotes,
   detailEventLabel,
   deadlineReminderLabel,
   type NotificationSnapshot,
 } from '../src/features/demo/noticeDetailPresentation';
 import { normalNoticeFixture } from '../fixtures/synthetic/notices';
+
+test('불확실 문장을 제거한 뒤 같은 안내가 남으면 한 번만 표시한다', () => {
+  assert.deepEqual(
+    confirmedDetailReviewNotes(
+      [
+        '신청서를 제출하세요. 날짜 확인 필요.',
+        '신청서를 제출하세요. 원문 참고.',
+        '신청서를 제출하세요.',
+        '학생증을 지참하세요.',
+        '시각 미상',
+      ],
+      true,
+    ),
+    ['신청서를 제출하세요.', '학생증을 지참하세요.'],
+  );
+  assert.deepEqual(confirmedDetailReviewNotes([], false), []);
+});
 
 test('미확정 일정의 원문 월·일·시각과 후보 날짜를 숨기지 않는다', () => {
   const event = {

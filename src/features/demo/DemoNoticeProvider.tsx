@@ -17,6 +17,7 @@ import { normalNoticeFixture } from '../../../fixtures/synthetic/notices';
 import { ActionButton, Screen, styles } from '../../components/ui';
 import { createNoticeRepository } from '../../db/noticeRepository';
 import { createNoticeActions } from '../../services/noticeActions';
+import { removeSyntheticNotices } from '../../services/removeSyntheticNotices';
 import { createReminderReconciler } from '../../services/reminderReconciler';
 import {
   deadlineNotifications,
@@ -75,29 +76,33 @@ async function openDemoRepository() {
       },
     );
     const { notice, analysis } = normalNoticeFixture;
-    if (!(await repository.getNoticeDetail(notice.id))) {
-      await repository.upsertRawNotice(notice);
-      await repository.applyAnalysis(analysis);
-      await repository.saveNotice(notice.id);
-    }
-    for (const sample of notices) {
-      if (await repository.getNoticeDetail(sample.id)) continue;
-      const raw = collectedNoticeSchema.parse({
-        ...notice,
-        id: sample.id,
-        postId: sample.id.split(':')[2],
-        title: sample.title,
-        bodyText: sample.summary,
-        sourceUrl: `https://example.invalid/synthetic/notices/${sample.id}`,
-        extractedLinks: [],
-      });
-      const contentHash = await hashNoticeContent(
-        toAnalyzeNoticeRequest(raw),
-        (text) => digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
-      );
-      await repository.upsertRawNotice({ ...raw, contentHash });
-      if (sample.org === '국제교류처')
-        await repository.dismissNotice(sample.id);
+    if (demoEnabled) {
+      if (!(await repository.getNoticeDetail(notice.id))) {
+        await repository.upsertRawNotice(notice);
+        await repository.applyAnalysis(analysis);
+        await repository.saveNotice(notice.id);
+      }
+      for (const sample of notices) {
+        if (await repository.getNoticeDetail(sample.id)) continue;
+        const raw = collectedNoticeSchema.parse({
+          ...notice,
+          id: sample.id,
+          postId: sample.id.split(':')[2],
+          title: sample.title,
+          bodyText: sample.summary,
+          sourceUrl: `https://example.invalid/synthetic/notices/${sample.id}`,
+          extractedLinks: [],
+        });
+        const contentHash = await hashNoticeContent(
+          toAnalyzeNoticeRequest(raw),
+          (text) => digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+        );
+        await repository.upsertRawNotice({ ...raw, contentHash });
+        if (sample.org === '국제교류처')
+          await repository.dismissNotice(sample.id);
+      }
+    } else {
+      await removeSyntheticNotices(repository);
     }
     const platform = deadlineNotifications;
     let demoFireAt: string | null = null;
@@ -133,7 +138,7 @@ async function openDemoRepository() {
         }
       : undefined;
     const reservationStatus =
-      developerToolsEnabled && platform && reconcile
+      demoEnabled && platform && reconcile
         ? async (enable: boolean) => {
             if (enable && !(await requestNotificationPermission())) {
               throw new Error('기기 설정에서 알림을 허용해 주세요.');

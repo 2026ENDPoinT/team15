@@ -11,11 +11,11 @@ import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function NoticeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { notice, saved, actions, checklist, home } = useDemoNotice();
+  const { notice, notices, saved, actions, checklist, home } = useDemoNotice();
   const progress = home.notices.find((item) => item.id === id)?.progress;
   const goBack = () =>
     router.canGoBack() ? router.back() : router.replace('/');
-  if (id !== notice.id)
+  if (id !== notice.id || !notices.some((item) => item.id === id))
     return (
       <Screen>
         <Text style={styles.title}>공지를 찾을 수 없어요</Text>

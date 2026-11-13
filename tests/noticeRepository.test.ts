@@ -14,6 +14,7 @@ import {
   type NoticeDatabase,
 } from '../src/db/noticeRepository';
 import { createNoticeActions } from '../src/services/noticeActions';
+import { removeSyntheticNotices } from '../src/services/removeSyntheticNotices';
 import {
   createReminderReconciler,
   type ReminderPlatform,
@@ -428,6 +429,72 @@ test('메인에서 버린 저장 공지는 휴지통으로 이동하고 알림�
       'preparing',
     );
     assert.deepEqual(await repository.getChecklist(notice.id), checklist);
+  } finally {
+    db.close();
+  }
+});
+
+test('기존 가상 공지만 제거하고 실제 공지·체크를 보존하며 가상 알림을 취소한다', async () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    const repository = await openRepository(db);
+    const { notice, analysis } = normalNoticeFixture;
+    await repository.upsertRawNotice(notice);
+    await repository.applyAnalysis(analysis);
+    await repository.saveNotice(notice.id);
+    const live = {
+      ...notice,
+      id: notice.id.replace(/[^:]+$/, '897698'),
+      postId: '897698',
+      sourceUrl: 'https://www.seoultech.ac.kr/service/info/notice/?idx=897698',
+    };
+    await repository.upsertRawNotice(live);
+    await repository.applyAnalysis({ ...analysis, notice_id: live.id });
+    await repository.saveNotice(live.id);
+    const checklist = await repository.getChecklist(live.id);
+    await repository.setChecklistCompleted(checklist.items[0]!.id, true);
+    const before = await repository.getNoticeDetail(live.id);
+    const canceled: string[] = [];
+    const reconcile = createReminderReconciler(
+      repository,
+      {
+        isAllowed: async () => true,
+        listScheduled: async () => [
+          {
+            key: `${notice.id}:application_close:v1`,
+            noticeId: notice.id,
+            fireAt: '2026-11-19T00:00:00Z',
+            identifier: 'old-synthetic-reminder',
+          },
+        ],
+        cancel: async (id) => {
+          canceled.push(id);
+        },
+        schedule: async () => 'live-reminder',
+      },
+      () => new Date('2026-11-14T00:00:00Z'),
+    );
+    await removeSyntheticNotices(repository);
+    await removeSyntheticNotices(repository);
+    assert.deepEqual(
+      (await repository.listNoticeRecords()).map(({ notice }) => notice.id),
+      [live.id],
+    );
+    const home = await repository.getHomeModel(
+      new Date('2026-11-14T00:00:00Z'),
+    );
+    assert.deepEqual(
+      home.notices.map(({ id }) => id),
+      [live.id],
+    );
+    assert.ok(home.schedule.every(({ noticeId }) => noticeId === live.id));
+    assert.deepEqual(await repository.getNoticeDetail(live.id), before);
+    assert.equal(
+      (await repository.getChecklist(live.id)).items[0]!.completed,
+      true,
+    );
+    await reconcile();
+    assert.deepEqual(canceled, ['old-synthetic-reminder']);
   } finally {
     db.close();
   }

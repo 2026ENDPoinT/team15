@@ -67,9 +67,8 @@ import { AnalysisSettings } from './AnalysisSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { developerToolsEnabled } from '../features/verification/developerTools';
 import {
-  detailReviewNotes,
+  confirmedDetailReviewNotes,
   detailEventLabel,
-  deadlineReminderLabel,
 } from '../features/demo/noticeDetailPresentation';
 
 import type { Disposition as Bucket } from '../../shared/contracts';
@@ -260,11 +259,10 @@ export default function CampusApp() {
   const pageRef = useRef(page);
   pageRef.current = page;
   const {
-    buckets,
+    buckets: storedBuckets,
     actions,
     details,
     checklists,
-    reminders,
     notificationSnapshot,
     refreshReminders,
     notices,
@@ -284,15 +282,26 @@ export default function CampusApp() {
   } = useDemoNotice();
   const changing = useRef(false);
   const changingNotices = useRef(new Set<string>());
-  const [pendingNoticeIds, setPendingNoticeIds] = useState<string[]>([]);
-  // Keep processed cards out of the queue until a repository snapshot confirms
-  // their new bucket. A background reload can supersede the action's reload.
+  const [pendingBuckets, setPendingBuckets] = useState<
+    Record<string, Bucket | undefined>
+  >({});
+  const buckets = useMemo(
+    () => ({ ...storedBuckets, ...pendingBuckets }),
+    [storedBuckets, pendingBuckets],
+  );
+  // Keep optimistic moves until a repository snapshot confirms them. A
+  // background reload may supersede the action's reload with an older snapshot.
   useEffect(() => {
-    setPendingNoticeIds((old) => {
-      const next = old.filter((id) => buckets[id] === 'unseen');
-      return next.length === old.length ? old : next;
+    setPendingBuckets((old) => {
+      const confirmed = Object.keys(old).filter(
+        (id) => storedBuckets[id] === old[id],
+      );
+      if (!confirmed.length) return old;
+      const next = { ...old };
+      for (const id of confirmed) delete next[id];
+      return next;
     });
-  }, [buckets]);
+  }, [storedBuckets]);
   const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
   const options = Array.from(
@@ -517,14 +526,25 @@ export default function CampusApp() {
     }[action as 'delete' | 'discard' | 'select' | 'restore'];
     if (!write || changingNotices.current.has(id)) return false;
     changingNotices.current.add(id);
-    if (action === 'select' || action === 'discard') {
-      setPendingNoticeIds((old) => [...old, id]);
-    }
+    const targetBucket = {
+      select: 'saved',
+      discard: 'dismissed',
+      restore: 'unseen',
+      delete: undefined,
+    } as const;
+    setPendingBuckets((old) => ({
+      ...old,
+      [id]: targetBucket[action as keyof typeof targetBucket],
+    }));
     try {
       await write(id);
       setDeferredNoticeIds((old) => old.filter((entry) => entry !== id));
     } catch {
-      setPendingNoticeIds((old) => old.filter((entry) => entry !== id));
+      setPendingBuckets((old) => {
+        const next = { ...old };
+        delete next[id];
+        return next;
+      });
       setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
       return false;
     } finally {
@@ -751,17 +771,14 @@ export default function CampusApp() {
             />
           )}
           {analysis &&
-            detailReviewNotes(
+            confirmedDetailReviewNotes(
               analysis.review_notes,
               !!selectedDetail?.raw.attachments.length,
-            )
-              .map(confirmedCardText)
-              .filter(Boolean)
-              .map((note) => (
-                <Text key={note} style={s.muted}>
-                  {note}
-                </Text>
-              ))}
+            ).map((note) => (
+              <Text key={note} style={s.muted}>
+                {note}
+              </Text>
+            ))}
           {!analysis && selectedDetail?.raw.bodyText && (
             <>
               <Text style={s.section}>공지 본문</Text>
@@ -871,13 +888,6 @@ export default function CampusApp() {
                 <Text style={s.muted}>확인된 신청·제출 항목이 없어요.</Text>
               )}
               <View style={s.reminderStatus}>
-                <Text style={s.buttonText}>
-                  {deadlineReminderLabel(
-                    notice.id,
-                    notificationSnapshot,
-                    reminders,
-                  )}
-                </Text>
                 <Text style={s.muted}>
                   확정된 신청 마감 하루 전 오전 9시(KST)에 알려드려요. 신청 완료
                   상태이거나 예약 시각이 지났다면 예약하지 않아요.
@@ -949,7 +959,6 @@ export default function CampusApp() {
                           status,
                           college,
                           saveProfile,
-                          reminders,
                           notificationSnapshot,
                           refreshReminders,
                         ]
@@ -963,11 +972,10 @@ export default function CampusApp() {
                           dept,
                           grade,
                           status,
-                          reminders,
                           notificationSnapshot,
                           refreshReminders,
                           deferredNoticeIds,
-                          pendingNoticeIds,
+                          pendingBuckets,
                           profile,
                           page === 1 ? showAll : null,
                           minute,
@@ -995,7 +1003,6 @@ export default function CampusApp() {
                     let visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
-                        (page === 1 && pendingNoticeIds.includes(notice.id)) ||
                         ((page === 1 || page === 2) &&
                           endedNoticeIds.has(notice.id))
                       )
@@ -1504,7 +1511,7 @@ export default function CampusApp() {
                                         label={
                                           page === 1
                                             ? '키워드 설정하기 →'
-                                            : '맞춤 공지 찾아보기 →'
+                                            : '← 맞춤 공지 찾아보기'
                                         }
                                         onPress={() =>
                                           navigate(page === 1 ? 3 : 1)
@@ -1517,7 +1524,6 @@ export default function CampusApp() {
                             ) : (
                               <>
                                 <AnalysisSettings />
-                                <NotificationSettings />
                                 <View style={s.card}>
                                   <Text style={s.section}>내 정보</Text>
                                   <Text style={s.muted}>소속 단과대학</Text>
@@ -1779,6 +1785,7 @@ export default function CampusApp() {
                                     }
                                   />
                                 )}
+                                <NotificationSettings />
                                 {developerToolsEnabled && (
                                   <Button
                                     label="개발자 도구"
@@ -1788,9 +1795,8 @@ export default function CampusApp() {
                               </>
                             )}
                             <Text style={s.muted}>
-                              가상 예시는 카드에 표시됩니다. 실제 공지의 내용은
-                              원문에서 확인하세요. 공지 선택과 준비물 체크는 이
-                              기기에 저장됩니다.
+                              공지의 내용은 원문에서 확인하세요. 공지 선택과
+                              준비물 체크는 이 기기에 저장됩니다.
                             </Text>
                           </GestureScrollView>
                         )}
