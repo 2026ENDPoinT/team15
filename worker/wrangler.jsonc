@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "team15-notice-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-10",
+  "workers_dev": true,
+  // 기본 HKG 실행에서 Gemini UNSUPPORTED_LOCATION을 확인했다. 지원 지역인 서울 인근에 배치한다.
+  "placement": { "region": "gcp:asia-northeast3" },
+  "vars": {
+    // 2026-11-13 실제 두 본문으로 검증한 e1 모델. 변경 시 extractor 버전도 갱신한다.
+    "GEMINI_MODEL": "gemini-3.5-flash-lite",
+    "ANALYSIS_ENABLED": "true",
+  },
+  "ratelimits": [
+    {
+      "name": "ANALYZE_RATE_LIMITER",
+      "namespace_id": "1505",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
+  "observability": { "enabled": true },
+}

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository contains the T01 Expo application scaffold, T02 live collection adapters, SQLite persistence merged from main, planning documentation, shared contracts, synthetic and real HTML fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The AI Worker and live collection integration into the product screens remain planned. T01 basic flows and T02 Android device verification were confirmed complete by the user on 2026-11-13 before the SQLite merge; that report does not verify the newly merged persistence flow on a device. See the T02 handoff for the scope and evidence.
+This repository contains the T01 Expo application scaffold, T02 live collection adapters, SQLite persistence merged from main, planning documentation, shared contracts, synthetic and real HTML fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The T05 AI Worker is deployed and verified against real Gemini responses from both captured notice bodies, with local tests and deployed authentication/rate-limit/expiry checks. Live collection integration into the product screens remains planned. T01 basic flows and T02 Android device verification were confirmed complete by the user on 2026-11-13 before the SQLite merge; that report does not verify the newly merged persistence flow on a device. See the T02 handoff for the scope and evidence.
 
 - `README.md`: team and project identification.
 - `docs/campus_notice_hackathon_plan.md`: product scope, workflows, and delivery checklist.
@@ -12,14 +12,14 @@ This repository contains the T01 Expo application scaffold, T02 live collection 
 - `fixtures/synthetic/`: explicitly fictional notices and API responses.
 - `tests/`: contract and canonicalization tests.
 - `app/`: Expo Router home/discover tabs and shared notice detail.
-- `src/`: four-screen UI prototype with in-memory state, legacy SQLite-backed demo state, collection, and services. The new UI is not yet connected to the SQLite repository.
+- `src/`: four-screen UI prototype with SQLite-backed notice state, in-memory profile/keyword settings, collection, and services. Android notification scheduling/cancellation is connected; real-device validation after this integration remains separate.
 - `src/db/`: migrations and B's notice repository.
 - `docs/campus_notice_t01_handoff.md`: app execution, ownership boundaries, and device checks.
 - `src/sources/`: board adapters, HTML cleanup, collection, and smoke verification.
 - `fixtures/real/`: original public HTML responses and capture metadata.
 - `docs/campus_notice_t02_handoff.md`: collection contracts, automated validation, and user-reported device verification.
 
-The AI proxy in `worker/` remains planned. Keep SQL, HTML parsing, and AI SDK calls out of screens; isolate eligibility and date calculations as pure functions. Use B's repository/service boundary for persistence and future collection integration.
+The AI proxy in `worker/` includes authentication, rate limiting, Gemini calls, and output validation. See `docs/campus_notice_t05_handoff.md` for deployment evidence, verification limits, and the T07 integration boundary. Keep SQL, HTML parsing, and AI SDK calls out of screens; isolate eligibility and date calculations as pure functions. Use B's repository/service boundary for persistence and future collection integration.
 
 ## Build, Test, and Development Commands
 
@@ -34,6 +34,9 @@ Use the Node version pinned in `.nvmrc`. The root package provides the Expo deve
 - `npm run web`: browser preview, not device validation.
 - `npm run build:android`: export an Android Metro/Hermes bundle, not an APK.
 - `npm run build:web`: export the browser verification build.
+- `npm run test:worker`: run Worker tests, including local workerd with mocked Gemini; local ports are required.
+- `npm run worker:build`: build a Worker dry-run bundle without deploying.
+- `npm run worker:dev`: run the local Worker; configure ignored `worker/.dev.vars` first for real AI calls.
 - `npm run test:e2e`: build web and run Playwright UI integration tests; install Chromium first with `npx playwright install chromium`.
 
 - `rg --files`: inspect available repository files.
