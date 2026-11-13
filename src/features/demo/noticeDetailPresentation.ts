@@ -1,5 +1,6 @@
 import type { ReminderRecord } from '../../db/noticeRepository';
 import type { ExtractedEvent } from '../../../shared/contracts';
+import { confirmedCardText } from './noticeCardPresentation';
 
 export function detailEventLabel(event: ExtractedEvent): string {
   if (event.status === 'resolved')
@@ -33,6 +34,19 @@ export function detailReviewNotes(notes: string[], hasAttachments: boolean) {
       '첨부 파일 및 이미지 내용은 확인하지 못했으므로 원문에서 확인하시기 바랍니다.',
     );
   return [...result];
+}
+export function confirmedDetailReviewNotes(
+  notes: string[],
+  hasAttachments: boolean,
+) {
+  // Distinct source notes can become identical after uncertain sentences are removed.
+  return [
+    ...new Set(
+      detailReviewNotes(notes, hasAttachments)
+        .map(confirmedCardText)
+        .filter(Boolean),
+    ),
+  ];
 }
 export type NotificationSnapshot = {
   status: 'available' | 'unsupported' | 'error';

@@ -55,6 +55,15 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
       },
     });
   });
+  await page.addInitScript(() => {
+    Object.assign(window, { openedNoticeUrls: [] as string[] });
+    window.open = (url) => {
+      (
+        window as typeof window & { openedNoticeUrls: string[] }
+      ).openedNoticeUrls.push(String(url));
+      return null;
+    };
+  });
   await page.goto('/');
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await page
@@ -119,18 +128,68 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   );
   await expect(actualCsTitle).toBeVisible();
   const card = page.getByTestId('discover-card');
+  await expect(card).not.toContainText(/확인 필요|원문에서 확인|시각 미확인/);
+  await card
+    .getByRole('button', { name: '공지 원문 열기', exact: true })
+    .click();
+  await expect(
+    card.getByRole('button', { name: '공지 자세히 보기 ↗', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  expect(
+    await page.evaluate(() =>
+      (
+        window as typeof window & { openedNoticeUrls: string[] }
+      ).openedNoticeUrls.at(-1),
+    ),
+  ).toBe(
+    verified.results.find(({ envelope }) =>
+      envelope.notice_id.startsWith('seoultech_cs:'),
+    )!.source_url,
+  );
   await card
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
   await page.getByRole('button', { name: '관심 저장', exact: true }).click();
   await page.getByRole('tab', { name: '메인', exact: true }).click();
+  const savedCard = actualCsTitle.locator('..');
+  const sourceButton = savedCard.getByRole('button', {
+    name: '공지 원문 열기',
+    exact: true,
+  });
+  await sourceButton.click();
+  await expect(
+    savedCard.getByRole('button', { name: '공지 자세히 보기 ∨', exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  const sourceBox = (await sourceButton.boundingBox())!;
+  const detailBox = (await savedCard
+    .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
+    .boundingBox())!;
+  expect(Math.abs(sourceBox.y - detailBox.y)).toBeLessThan(3);
+  expect(sourceBox.x).toBeGreaterThan(detailBox.x + detailBox.width);
+  await savedCard.screenshot({
+    path: testInfo.outputPath('t07_collapsed_card.png'),
+  });
   await actualCsTitle
     .locator('..')
     .getByRole('button', { name: '공지 자세히 보기 ∨', exact: true })
     .click();
+  await expect(
+    savedCard.getByRole('button', { name: '공지 원문 열기', exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    savedCard.getByRole('button', { name: '분석 다시 시도', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    savedCard
+      .getByTestId(/^notice-detail-/)
+      .getByRole('button', { name: '공지 원문 열기', exact: true }),
+  ).toHaveCount(0);
   const cs = verified.results.find(({ envelope }) =>
     envelope.notice_id.startsWith('seoultech_cs:'),
   )!;
+  await expect(actualCsTitle.locator('..')).not.toContainText(
+    /확인 필요|원문에서 확인|시각 미확인/,
+  );
   await expect(
     page.getByText(
       '프로그램 일시 시작 · 일시: 11.2.(월)~12.23.(수) · 후보 2026-11-02 · 확인 필요',
@@ -144,13 +203,11 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
-  await actualCsTitle
+  const progressSelect = actualCsTitle
     .locator('..')
-    .getByRole('button', { name: '준비 중으로 변경', exact: true })
-    .click();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+    .getByRole('combobox', { name: '공지 상태' });
+  await progressSelect.selectOption('preparing');
+  await expect(progressSelect).toHaveValue('preparing');
   await page.screenshot({
     path: testInfo.outputPath('t07_real_detail.png'),
     fullPage: true,
@@ -205,9 +262,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+  await expect(progressSelect).toHaveValue('preparing');
   expect(analyzed).toHaveLength(2);
   expect(errors).toEqual([]);
 });

@@ -1,3 +1,5 @@
+import { noticeCardStyles } from './noticeCardStyles';
+import { NoticeSourceButton } from './NoticeSourceButton';
 import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
 import { useCardMotion } from './gestureMotion';
@@ -14,6 +16,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Notice } from '../features/demo/campusNotices';
+import {
+  confirmedCardText,
+  noticeCardMetadata,
+} from '../features/demo/noticeCardPresentation';
 
 type Action = 'discard' | 'hold' | 'select';
 
@@ -35,6 +41,8 @@ export default function DiscoverCard({
   onDragging: (dragging: boolean) => void;
 }) {
   const touchLock = useCardTouchLock(onDragging);
+  const metadata = noticeCardMetadata(notice, eligibilityLabel);
+  const summary = confirmedCardText(notice.summary);
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -131,28 +139,32 @@ export default function DiscoverCard({
             <Text numberOfLines={1} style={styles.tags}>
               {notice.tags.join(' · ')}
             </Text>
-            <Text numberOfLines={2} style={styles.muted}>
-              {eligibilityLabel} ·{' '}
-              {notice.date
-                ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
-                : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
-            </Text>
-            <Text numberOfLines={2} style={styles.muted}>
-              {notice.summary}
-            </Text>
+            {!!metadata && (
+              <Text numberOfLines={2} style={styles.muted}>
+                {metadata}
+              </Text>
+            )}
+            {!!summary && (
+              <Text numberOfLines={2} style={styles.muted}>
+                {summary}
+              </Text>
+            )}
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded }}
-            aria-expanded={expanded}
-            onPress={() => {
-              reset();
-              setExpanded(true);
-            }}
-            style={styles.detailToggle}
-          >
-            <Text style={styles.link}>공지 자세히 보기 ↗</Text>
-          </Pressable>
+          <View style={styles.detailToggle}>
+            <Pressable
+              style={styles.detailButton}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              aria-expanded={expanded}
+              onPress={() => {
+                reset();
+                setExpanded(true);
+              }}
+            >
+              <Text style={styles.link}>공지 자세히 보기 ↗</Text>
+            </Pressable>
+            <NoticeSourceButton notice={notice} />
+          </View>
           <View style={styles.actions}>
             {(
               [
@@ -218,93 +230,53 @@ export default function DiscoverCard({
   );
 }
 
-const styles = StyleSheet.create({
-  detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#dfe5d9',
-  },
-  detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
-  closeButton: {
-    minHeight: 48,
-    minWidth: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailScroll: { flex: 1 },
-  detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
-  deck: { flexShrink: 1, minHeight: 0 },
-  stackCard: {
-    position: 'absolute',
-    top: 24,
-    bottom: 38,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    borderRadius: 20,
-  },
-  stackBack: {
-    left: 20,
-    right: 20,
-    bottom: 28,
-    backgroundColor: '#edf1e8',
-  },
-  stackFront: {
-    left: 10,
-    right: 10,
-    backgroundColor: '#f5f7f1',
-  },
-  remaining: {
-    paddingTop: 28,
-    fontSize: 12,
-    lineHeight: 20,
-    textAlign: 'center',
-    color: '#728174',
-  },
-  card: {
-    flexShrink: 1,
-    minHeight: 0,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-    borderRadius: 20,
-    backgroundColor: 'white',
-    overflow: 'hidden',
-  },
-  bodyContent: {
-    flexShrink: 1,
-    minHeight: 0,
-    overflow: 'hidden',
-    padding: 14,
-    gap: 6,
-  },
-  title: { fontSize: 22, lineHeight: 30, fontWeight: '800', color: '#213e32' },
-  muted: { fontSize: 12, lineHeight: 19, color: '#728174' },
-  tags: { fontSize: 12, lineHeight: 20, color: '#28634d' },
-  detailToggle: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#dfe5d9',
-  },
-  link: { fontSize: 12, color: '#28634d' },
-  actions: {
-    flexDirection: 'row',
-    gap: 7,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-  },
-  button: {
-    flex: 1,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#dfe5d9',
-  },
-  primary: { backgroundColor: '#28634d', borderColor: '#28634d' },
-  light: { color: 'white' },
-});
+const styles = {
+  ...noticeCardStyles,
+  ...StyleSheet.create({
+    detailScreen: { flex: 1, backgroundColor: '#f7f8f3' },
+    detailHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      borderBottomWidth: 1,
+      borderBottomColor: '#dfe5d9',
+    },
+    detailHeading: { fontSize: 18, fontWeight: '700', color: '#213e32' },
+    closeButton: {
+      minHeight: 48,
+      minWidth: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    detailScroll: { flex: 1 },
+    detailContent: { padding: 18, gap: 12, paddingBottom: 32 },
+    deck: { flexShrink: 1, minHeight: 0 },
+    stackCard: {
+      position: 'absolute',
+      top: 24,
+      bottom: 38,
+      borderWidth: 1,
+      borderColor: '#dfe5d9',
+      borderRadius: 20,
+    },
+    stackBack: {
+      left: 20,
+      right: 20,
+      bottom: 28,
+      backgroundColor: '#edf1e8',
+    },
+    stackFront: {
+      left: 10,
+      right: 10,
+      backgroundColor: '#f5f7f1',
+    },
+    remaining: {
+      paddingTop: 28,
+      fontSize: 12,
+      lineHeight: 20,
+      textAlign: 'center',
+      color: '#728174',
+    },
+  }),
+};

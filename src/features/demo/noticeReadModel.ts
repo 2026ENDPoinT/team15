@@ -48,8 +48,7 @@ export function toNoticeCard(
       )
     : null;
   const otherEvent = detail.analysisFresh
-    ? (analysis?.events.find((event) => event.type === 'application_close') ??
-      analysis?.events[0])
+    ? analysis?.events.find((event) => event.status === 'resolved')
     : null;
   return {
     id: record.notice.id,
