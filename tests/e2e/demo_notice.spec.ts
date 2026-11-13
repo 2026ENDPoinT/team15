@@ -30,9 +30,7 @@ test('시연 새로고침이 관심 공지를 첫 카드와 메인에 표시한�
   await expect(
     card.getByRole('heading', { name: '정보통신대학 장학금 신청 안내' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '공지 새로고침', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByTestId('discover-refresh-area')).toBeVisible();
   await page.getByRole('tab', { name: '메인', exact: true }).click();
   await expect(
     page.getByRole('heading', {

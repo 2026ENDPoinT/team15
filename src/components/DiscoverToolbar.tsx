@@ -7,7 +7,11 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import Reanimated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { PageGestureContext } from './gestureMotion';
 import { NoticeSheet } from './NoticeSheet';
 
@@ -35,6 +39,13 @@ export function DiscoverToolbar({
   const [pulling, setPulling] = useState(false);
   const [pending, setPending] = useState(false);
   const locked = useRef(false);
+  const pullDistance = useSharedValue(0);
+  const busy = refreshing || pending;
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: busy ? 36 : Math.min(48, pullDistance.value * 0.5) },
+    ],
+  }));
   useEffect(() => {
     if (!active) setOpen(false);
   }, [active]);
@@ -50,15 +61,20 @@ export function DiscoverToolbar({
     }
   };
   const gesture = Gesture.Pan()
+    .enabled(active && !busy)
     .activeOffsetY(12)
     .failOffsetX([-20, 20])
+    .onStart(() => {
+      runOnJS(setPulling)(true);
+    })
     .onUpdate((event) => {
-      runOnJS(setPulling)(event.translationY >= 56);
+      pullDistance.value = Math.max(0, event.translationY);
     })
     .onEnd((event) => {
       if (event.translationY >= 56) runOnJS(refresh)();
     })
     .onFinalize(() => {
+      pullDistance.value = 0;
       runOnJS(setPulling)(false);
     });
   if (pager) gesture.blocksExternalGesture(pager);
@@ -70,6 +86,19 @@ export function DiscoverToolbar({
           collapsable={false}
           style={styles.toolbar}
         >
+          {(pulling || busy) && (
+            <Reanimated.View
+              pointerEvents="none"
+              testID="discover-refresh-indicator"
+              style={[styles.indicator, indicatorStyle]}
+            >
+              <ActivityIndicator
+                accessibilityLabel="공지 새로고침 중"
+                size="small"
+                color="#28634d"
+              />
+            </Reanimated.View>
+          )}
           <View style={styles.row}>
             <Text accessibilityRole="header" style={styles.title}>
               {showAll ? '전체 공지' : '맞춤 공지'} · {count}개
@@ -84,22 +113,7 @@ export function DiscoverToolbar({
               </Text>
             </Pressable>
           </View>
-          <View style={styles.row}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="공지 새로고침"
-              disabled={refreshing || pending}
-              onPress={() => void refresh()}
-              style={styles.control}
-            >
-              {refreshing || pending ? (
-                <ActivityIndicator size="small" color="#28634d" />
-              ) : (
-                <Text style={styles.hint}>
-                  {pulling ? '놓으면 새로고침' : '↓ 여기서 당겨 새로고침'}
-                </Text>
-              )}
-            </Pressable>
+          <View style={[styles.row, { justifyContent: 'flex-end' }]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="공지 갱신 상태"
@@ -124,7 +138,24 @@ export function DiscoverToolbar({
   );
 }
 const styles = StyleSheet.create({
-  toolbar: { flexShrink: 0 },
+  toolbar: { flexShrink: 0, zIndex: 10 },
+  indicator: {
+    position: 'absolute',
+    top: 0,
+    left: '50%',
+    marginLeft: -22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#dfe5d9',
+    boxShadow: '0px 2px 6px rgba(33, 62, 50, 0.18)',
+    zIndex: 20,
+    elevation: 4,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

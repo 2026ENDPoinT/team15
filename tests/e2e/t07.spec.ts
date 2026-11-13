@@ -1,3 +1,4 @@
+import { pullRefresh } from './pull_refresh';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { validateAnalysis } from '../../worker/src/validate';
@@ -77,9 +78,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await page
     .getByRole('button', { name: '전체 공지 보기', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: '공지 새로고침', exact: true })
-    .click();
+  await pullRefresh(page);
   await page
     .getByRole('button', { name: '공지 갱신 상태', exact: true })
     .click();
@@ -118,9 +117,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
     page.getByText('AI 분석 · 2 / 2건', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '공지 새로고침', exact: true }),
-  ).toBeEnabled();
+  await expect(page.getByTestId('discover-refresh-indicator')).toHaveCount(0);
   // The title is taken from the public HTML fixture, not an authored display sample.
   const actualCsTitle = page
     .getByTestId('active-page')

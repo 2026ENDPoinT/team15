@@ -1,3 +1,4 @@
+import { pullRefresh } from './pull_refresh';
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 import { extractHwpxText } from '../../worker/src/seoultechHwpx';
@@ -104,7 +105,7 @@ test('실제 HWPX에서 검증한 첨부 정보를 모의 분석으로 상세와
   ).toBeVisible();
   await tab('맞춤 공지').click();
   await button('전체 공지 보기').click();
-  await button('공지 새로고침').click();
+  await pullRefresh(page);
   const card = page.getByTestId('active-page').getByTestId('discover-card');
   await expect(
     card.getByText(recorded.notice.title, { exact: true }),

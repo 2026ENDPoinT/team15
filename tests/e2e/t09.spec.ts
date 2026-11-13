@@ -1,3 +1,4 @@
+import { pullRefresh } from './pull_refresh';
 import { expect, test } from '@playwright/test';
 import {
   t09Html,
@@ -67,7 +68,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
   await button('전체 공지 보기').click();
-  await button('공지 새로고침').click();
+  await pullRefresh(page);
   await expect(
     page.getByTestId('discover-card').getByText(t09Title, { exact: true }),
   ).toBeVisible();
@@ -116,7 +117,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   stage = 'changed';
   failAI = true;
   await page.clock.fastForward(31_000);
-  await button('공지 새로고침').click();
+  await pullRefresh(page);
   await button('공지 갱신 상태').click();
   await expect(
     page.getByText('AI 분석 · 0 / 1건', { exact: true }),

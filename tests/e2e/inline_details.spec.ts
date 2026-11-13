@@ -74,12 +74,18 @@ test('맞춤 공지는 한 장씩 처리하고 스크롤 없이 표시하고 상
   await expect(card).toHaveCount(0);
 });
 
-test('상단 당기기는 새로고침만 실행하고 카드와 화면 위치를 유지한다', async ({
+test('상단 당기기는 원형 로딩을 표시하고 카드와 화면 위치를 유지한다', async ({
   page,
-}) => {
+}, testInfo) => {
   let requests = 0;
+  let hold = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   await page.route('https://**.seoultech.ac.kr/**', async (route) => {
     requests += 1;
+    if (hold) await gate;
     await route.fulfill({ status: 503, body: 'Test collection unavailable' });
   });
   await page.clock.install({ time: new Date('2026-11-14T03:00:00Z') });
@@ -89,7 +95,12 @@ test('상단 당기기는 새로고침만 실행하고 카드와 화면 위치�
     name: '공지 새로고침',
     exact: true,
   });
-  await expect(refresh).toBeEnabled();
+  await expect(refresh).toHaveCount(0);
+  const indicator = page.getByTestId('discover-refresh-indicator');
+  await expect(indicator).toHaveCount(0);
+  await expect(
+    page.getByText(/여기서 당겨 새로고침|놓으면 새로고침/),
+  ).toHaveCount(0);
   await page.clock.fastForward(31_000);
   const title = await page
     .getByTestId('discover-card')
@@ -99,12 +110,37 @@ test('상단 당기기는 새로고침만 실행하고 카드와 화면 위치�
   const header = (await page
     .getByTestId('discover-refresh-area')
     .boundingBox())!;
-  await page.mouse.move(header.x + 15, header.y + 10);
-  await page.mouse.down();
-  await page.mouse.move(header.x + 15, header.y + 90, { steps: 12 });
+  const pull = async (distance: number) => {
+    await page.mouse.move(header.x + 15, header.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(header.x + 15, header.y + 10 + distance, {
+      steps: 12,
+    });
+  };
+  await pull(30);
+  await expect(indicator).toBeVisible();
   await page.mouse.up();
-  await expect.poll(() => requests).toBeGreaterThan(before);
-  await expect(refresh).toBeEnabled();
+  await expect(indicator).toHaveCount(0);
+  expect(requests).toBe(before);
+  hold = true;
+  try {
+    await pull(90);
+    await expect(indicator).toBeVisible();
+    await page.mouse.up();
+    await expect.poll(() => requests).toBeGreaterThan(before);
+    await expect(indicator).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath('pull-refresh-spinner.png'),
+    });
+    const inFlight = requests;
+    await pull(90);
+    await page.mouse.up();
+    expect(requests).toBe(inFlight);
+  } finally {
+    hold = false;
+    release();
+  }
+  await expect(indicator).toHaveCount(0);
   await expect(
     page.getByTestId('discover-card').getByRole('heading'),
   ).toHaveText(title);
