@@ -12,7 +12,7 @@ This repository contains the T01 Expo application scaffold, T02 live collection 
 - `fixtures/synthetic/`: explicitly fictional notices and API responses.
 - `tests/`: contract and canonicalization tests.
 - `app/`: Expo Router home/discover tabs and shared notice detail.
-- `src/`: shared UI, SQLite-backed demo state, collection, and services.
+- `src/`: four-screen UI prototype with in-memory state, legacy SQLite-backed demo state, collection, and services. The new UI is not yet connected to the SQLite repository.
 - `src/db/`: migrations and B's notice repository.
 - `docs/campus_notice_t01_handoff.md`: app execution, ownership boundaries, and device checks.
 - `src/sources/`: board adapters, HTML cleanup, collection, and smoke verification.

@@ -95,8 +95,8 @@ export default function CollectionVerificationScreen() {
       )}
       <ActionButton
         secondary
-        label="공지 찾기로 돌아가기"
-        onPress={() => router.replace('/(tabs)/discover')}
+        label="메인으로 돌아가기"
+        onPress={() => router.replace('/')}
       />
     </Screen>
   );

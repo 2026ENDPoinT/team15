@@ -68,12 +68,23 @@ test('실제 HTML fixture로 Expo 파싱·해시·검증 화면을 연결한다'
   await expect(
     page.getByText('ID: seoultech_cs:58476:897737', { exact: false }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: '공지 찾기로 돌아가기' }).click();
+  await page.getByRole('button', { name: '메인으로 돌아가기' }).click();
   await expect(
-    page.getByRole('link', {
-      name: '[가상] AI 캠퍼스 해커톤 참가자 모집 상세 보기',
-      exact: true,
-    }),
+    page.getByRole('heading', { name: '선택한 기회를 한눈에', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: '맞춤 공지', exact: true }).click();
+  await expect(
+    page.getByText('나에게 맞는 새로운 기회', { exact: true }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('이전 공지 찾기 주소는 새 통합 UI로 연결된다', async ({ page }) => {
+  await page.goto('/discover');
+  await expect(
+    page.getByRole('heading', { name: '선택한 기회를 한눈에', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('tab', { name: '맞춤 공지', exact: true }),
+  ).toBeVisible();
 });
