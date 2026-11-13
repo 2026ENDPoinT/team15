@@ -83,15 +83,13 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   });
   await checkedItem.click();
   await expect(checkedItem).toBeChecked();
-  await page
+  const progressSelect = page
     .getByTestId('active-page')
     .getByText(t09Title, { exact: true })
     .locator('..')
-    .getByRole('button', { name: '준비 중으로 변경', exact: true })
-    .click();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+    .getByRole('combobox', { name: '공지 상태' });
+  await progressSelect.selectOption('preparing');
+  await expect(progressSelect).toHaveValue('preparing');
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
   await expect(
@@ -137,9 +135,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await button('닫기').click();
   await openSaved();
   await expect(checkedItem).toBeChecked();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+  await expect(progressSelect).toHaveValue('preparing');
   await expect(
     page.getByText('신청 마감 · 2026-11-23 18:00', { exact: true }),
   ).toBeVisible();

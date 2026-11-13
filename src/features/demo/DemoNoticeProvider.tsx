@@ -425,8 +425,28 @@ export function DemoNoticeProvider({ children }: PropsWithChildren) {
       update((_, repository) => repository.deleteNotice(id)),
     restoreNotice: (id) =>
       update((_, repository) => repository.restoreNotice(id)),
-    setProgress: (id, progress) =>
-      update((actions) => actions.setProgress(id, progress)),
+    setProgress: async (id, progress) => {
+      const { repository, actions } = await getRepository();
+      await actions.setProgress(id, progress);
+      // A single status write should not wait for every notice and checklist.
+      loadVersion.current++;
+      setState((current) => {
+        const detail = current?.details[id];
+        if (!current || !detail || detail.disposition !== 'saved')
+          return current;
+        return {
+          ...current,
+          details: { ...current.details, [id]: { ...detail, progress } },
+          home: {
+            ...current.home,
+            notices: current.home.notices.map((notice) =>
+              notice.id === id ? { ...notice, progress } : notice,
+            ),
+          },
+        };
+      });
+      void reloadState(repository).catch(() => undefined);
+    },
     setChecklistCompleted: (id, completed) =>
       update((actions) => actions.setChecklistCompleted(id, completed)),
     acknowledgeDeadlineChange: (id) =>

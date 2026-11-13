@@ -1,3 +1,4 @@
+import { confirmedCardText } from '../features/demo/noticeCardPresentation';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { DemoNotice } from '../features/demo/demoNotice';
@@ -11,7 +12,10 @@ export function NoticeCard({
   saved: boolean;
 }) {
   const deadline = notice.events.find(
-    (event) => event.type === 'application_close',
+    (event) =>
+      event.type === 'application_close' &&
+      !!event.date &&
+      !!confirmedCardText(event.displayDate),
   );
   return (
     <Link
@@ -28,7 +32,11 @@ export function NoticeCard({
           {saved ? <Text style={card.saved}>관심 저장됨</Text> : null}
         </View>
         <Text style={card.title}>{notice.title}</Text>
-        <Text style={styles.subtitle}>{notice.eligibilityLabel}</Text>
+        {!!confirmedCardText(notice.eligibilityLabel) && (
+          <Text style={styles.subtitle}>
+            {confirmedCardText(notice.eligibilityLabel)}
+          </Text>
+        )}
         <View style={styles.tagRow}>
           {notice.tags.map((tag) => (
             <Text key={tag} style={styles.tag}>
@@ -37,9 +45,11 @@ export function NoticeCard({
           ))}
         </View>
         <View style={card.footer}>
-          <Text style={card.deadline}>
-            신청 마감 {deadline?.displayDate} {deadline?.time}
-          </Text>
+          {deadline && (
+            <Text style={card.deadline}>
+              신청 마감 {deadline.displayDate} {deadline.time}
+            </Text>
+          )}
           <Text style={card.arrow}>↗</Text>
         </View>
       </Pressable>

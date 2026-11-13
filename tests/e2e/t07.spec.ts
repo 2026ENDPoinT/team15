@@ -119,6 +119,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   );
   await expect(actualCsTitle).toBeVisible();
   const card = page.getByTestId('discover-card');
+  await expect(card).not.toContainText(/확인 필요|원문에서 확인|시각 미확인/);
   await card
     .getByRole('button', { name: '공지 자세히 보기 ↗', exact: true })
     .click();
@@ -131,6 +132,9 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   const cs = verified.results.find(({ envelope }) =>
     envelope.notice_id.startsWith('seoultech_cs:'),
   )!;
+  await expect(actualCsTitle.locator('..')).not.toContainText(
+    /확인 필요|원문에서 확인|시각 미확인/,
+  );
   await expect(
     page.getByText(
       '프로그램 일시 시작 · 일시: 11.2.(월)~12.23.(수) · 후보 2026-11-02 · 확인 필요',
@@ -144,13 +148,11 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
-  await actualCsTitle
+  const progressSelect = actualCsTitle
     .locator('..')
-    .getByRole('button', { name: '준비 중으로 변경', exact: true })
-    .click();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+    .getByRole('combobox', { name: '공지 상태' });
+  await progressSelect.selectOption('preparing');
+  await expect(progressSelect).toHaveValue('preparing');
   await page.screenshot({
     path: testInfo.outputPath('t07_real_detail.png'),
     fullPage: true,
@@ -205,9 +207,7 @@ test('실제 HTML·기록된 AI 응답이 제품 카드·저장·체크·일정�
   await expect(
     page.getByRole('checkbox', { name: text, exact: true, checked: true }),
   ).toBeVisible();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+  await expect(progressSelect).toHaveValue('preparing');
   expect(analyzed).toHaveLength(2);
   expect(errors).toEqual([]);
 });

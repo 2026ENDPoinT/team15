@@ -14,6 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Notice } from '../features/demo/campusNotices';
+import {
+  confirmedCardText,
+  noticeCardMetadata,
+} from '../features/demo/noticeCardPresentation';
 
 type Action = 'discard' | 'hold' | 'select';
 
@@ -35,6 +39,8 @@ export default function DiscoverCard({
   onDragging: (dragging: boolean) => void;
 }) {
   const touchLock = useCardTouchLock(onDragging);
+  const metadata = noticeCardMetadata(notice, eligibilityLabel);
+  const summary = confirmedCardText(notice.summary);
   const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -131,15 +137,16 @@ export default function DiscoverCard({
             <Text numberOfLines={1} style={styles.tags}>
               {notice.tags.join(' · ')}
             </Text>
-            <Text numberOfLines={2} style={styles.muted}>
-              {eligibilityLabel} ·{' '}
-              {notice.date
-                ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
-                : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
-            </Text>
-            <Text numberOfLines={2} style={styles.muted}>
-              {notice.summary}
-            </Text>
+            {!!metadata && (
+              <Text numberOfLines={2} style={styles.muted}>
+                {metadata}
+              </Text>
+            )}
+            {!!summary && (
+              <Text numberOfLines={2} style={styles.muted}>
+                {summary}
+              </Text>
+            )}
           </View>
           <Pressable
             accessibilityRole="button"

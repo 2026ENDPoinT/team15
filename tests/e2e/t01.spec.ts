@@ -88,10 +88,27 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
-  await detailCard.getByRole('button', { name: '준비 중으로 변경' }).click();
+  const progressSelect = detailCard.getByRole('combobox', {
+    name: '공지 상태',
+  });
+  await expect(progressSelect).toHaveValue('preparing');
+  await expect(progressSelect.locator('option')).toHaveText([
+    '준비 중',
+    '신청 완료',
+  ]);
   await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+    detailCard.getByRole('button', { name: /으로 변경|로 변경/ }),
+  ).toHaveCount(0);
+  await progressSelect.selectOption('preparing');
+  await expect(progressSelect).toHaveValue('preparing');
+  await progressSelect.selectOption('applied');
+  await expect(progressSelect).toHaveValue('applied');
+  await progressSelect.selectOption('preparing');
+  await expect(progressSelect).toHaveValue('preparing');
+  await page.screenshot({
+    path: testInfo.outputPath('progress-select.png'),
+    fullPage: true,
+  });
   await page.reload();
   await expect(scholarship).toBeVisible();
   await detailCard
@@ -100,9 +117,7 @@ test('HTML과 같은 네 화면에서 분류·보류·복구·설정이 연결�
   await expect(
     page.getByRole('checkbox', { name: '참가 신청서 준비', checked: true }),
   ).toBeVisible();
-  await expect(
-    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
-  ).toBeVisible();
+  await expect(progressSelect).toHaveValue('preparing');
   await detailCard
     .getByRole('button', { name: '상세 접기 ∧', exact: true })
     .click();
