@@ -15,7 +15,13 @@ import {
   describeDate,
   type ResolvedEvent,
 } from '../domain/dates';
-import { migration1, migration2, migration3, migration4 } from './migrations';
+import {
+  migration1,
+  migration2,
+  migration3,
+  migration4,
+  migration5,
+} from './migrations';
 import type { CampusProfile } from '../domain/campusProfile';
 import type { CollectionResult } from '../sources/collector';
 
@@ -40,6 +46,7 @@ export interface SavedNotice {
 }
 
 export interface NoticeRepository {
+  listDiscoveredKeywords(): Promise<string[]>;
   getProfile(): Promise<CampusProfile | null>;
   saveProfile(profile: CampusProfile): Promise<void>;
   upsertRawNotice(notice: CollectedNotice): Promise<void>;
@@ -211,15 +218,39 @@ export async function createNoticeRepository(
       'PRAGMA user_version',
     );
     const current = version?.user_version;
-    if (current === 4) return;
-    if (current !== 0 && current !== 1 && current !== 2 && current !== 3)
+    if (current === 5) return;
+    if (
+      current !== 0 &&
+      current !== 1 &&
+      current !== 2 &&
+      current !== 3 &&
+      current !== 4
+    )
       throw new Error('Unsupported notice database version');
     if (current === 0) await db.execAsync(migration1);
     if (current < 2) await db.execAsync(migration2);
     if (current < 3) await db.execAsync(migration3);
-    await db.execAsync(migration4);
-    await db.execAsync('PRAGMA user_version = 4');
+    if (current < 4) await db.execAsync(migration4);
+    await db.execAsync(migration5);
+    const rows = await db.getAllAsync<AnalysisColumns>(
+      `SELECT analysis_json AS analysisJson, content_hash AS contentHash FROM notices`,
+    );
+    for (const row of rows) {
+      const analysis = readAnalysis(row.analysisJson);
+      if (isFresh(analysis, row.contentHash))
+        await storeKeywords(analysis.data.tags);
+    }
+    await db.execAsync('PRAGMA user_version = 5');
   });
+
+  async function storeKeywords(tags: string[]) {
+    for (const tag of new Set(tags.map((tag) => tag.trim()).filter(Boolean))) {
+      await db.runAsync(
+        'INSERT OR IGNORE INTO discovered_keywords (keyword) VALUES (?)',
+        [tag],
+      );
+    }
+  }
 
   let pending = Promise.resolve();
   function enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -283,6 +314,15 @@ export async function createNoticeRepository(
   }
 
   return {
+    listDiscoveredKeywords() {
+      return enqueue(async () =>
+        (
+          await db.getAllAsync<{ keyword: string }>(
+            'SELECT keyword FROM discovered_keywords ORDER BY rowid',
+          )
+        ).map(({ keyword }) => keyword),
+      );
+    },
     getProfile() {
       return enqueue(async () => {
         const row = await db.getFirstAsync<
@@ -557,11 +597,13 @@ export async function createNoticeRepository(
             ],
           );
           applied = result.changes > 0;
-          if (applied)
+          if (applied) {
+            await storeKeywords(analysis.data.tags);
             await initializeChecklist(
               analysis.notice_id,
               new Date().toISOString(),
             );
+          }
         });
         return applied;
       });

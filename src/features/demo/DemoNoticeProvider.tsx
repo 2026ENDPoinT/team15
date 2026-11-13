@@ -234,6 +234,7 @@ async function readState(repository: Repository) {
   return {
     home,
     reminderWarning,
+    discoveredKeywords: await repository.listDiscoveredKeywords(),
     profile: (await repository.getProfile()) ?? defaultCampusProfile,
     reminders,
     notificationSnapshot,
