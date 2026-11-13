@@ -118,10 +118,8 @@ export default function DiscoverCard({
             <Text numberOfLines={1} style={styles.tags}>
               {notice.tags.join(' · ')}
             </Text>
-            <Text numberOfLines={1} style={styles.muted}>
-              {eligibilityLabel}
-            </Text>
-            <Text numberOfLines={1} style={styles.muted}>
+            <Text numberOfLines={2} style={styles.muted}>
+              {eligibilityLabel} ·{' '}
               {notice.date
                 ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
                 : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}

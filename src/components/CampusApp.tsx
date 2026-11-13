@@ -47,7 +47,11 @@ import {
   type College,
   type CampusProfile,
 } from '../domain/campusProfile';
-import { recruitmentEnded } from '../domain/dates';
+import {
+  attendanceFollowUpEnded,
+  gatheringEnded,
+  recruitmentEnded,
+} from '../domain/dates';
 import { matchesCollege } from '../domain/collegeFilter';
 import type { Notice } from '../features/demo/campusNotices';
 import { useDemoNotice } from '../features/demo/DemoNoticeProvider';
@@ -118,6 +122,7 @@ function SwipeCard({
   act,
   detailContent,
   progressContent,
+  progress,
   eligibilityLabel,
   onDragging,
 }: {
@@ -126,6 +131,7 @@ function SwipeCard({
   act: (action: string) => void;
   detailContent: ReactNode;
   progressContent?: ReactNode;
+  progress?: 'saved' | 'preparing' | 'applied' | null | undefined;
   eligibilityLabel: string;
   onDragging: (dragging: boolean) => void;
 }) {
@@ -141,12 +147,17 @@ function SwipeCard({
     motion.reset();
   };
   const motion = useCardMotion(
-    bucket !== 'saved' && !expanded,
+    !expanded,
     () => {
       setDragging(true);
       touchLock.startDrag();
     },
     (dx, dy) => {
+      if (bucket === 'saved') {
+        if (dx <= -56) actRef.current('unselect');
+        reset();
+        return;
+      }
       if (Math.abs(dx) >= 56)
         actRef.current(
           dx > 0
@@ -169,6 +180,32 @@ function SwipeCard({
         style={[s.card, motion.style, dragging && s.draggingCard]}
       >
         <View style={s.between}>
+          <Text style={[s.muted, { flexShrink: 1 }]}>{notice.org}</Text>
+          <View style={s.noticeStatusTags}>
+            <Text style={s.tag}>
+              {notice.date
+                ? `${notice.date.slice(5).replace('-', '.')} 마감`
+                : '일정 미정'}
+            </Text>
+            {bucket === 'saved' && (
+              <Text
+                style={[
+                  s.tag,
+                  progress === 'preparing'
+                    ? s.progressPreparing
+                    : progress === 'applied'
+                      ? s.progressApplied
+                      : s.progressInterested,
+                ]}
+              >
+                {progress === 'preparing'
+                  ? '준비 중'
+                  : progress === 'applied'
+                    ? '신청 완료'
+                    : '관심 저장'}
+              </Text>
+            )}
+          </View>
           <Text style={s.muted}>{notice.org}</Text>
           <Text style={s.tag}>
             {notice.date
@@ -191,8 +228,8 @@ function SwipeCard({
             </Text>
           ))}
         </View>
-        <Text style={s.muted}>{eligibilityLabel}</Text>
         <Text style={s.muted}>
+          {eligibilityLabel} ·{' '}
           {notice.date
             ? `${notice.date}${notice.time ? ` · ${notice.time} KST` : ''}`
             : (notice.scheduleText ?? '정확한 일정은 원문에서 확인')}
@@ -200,7 +237,7 @@ function SwipeCard({
         {bucket === 'saved' && progressContent}
         <View style={s.row}>
           {bucket === 'saved' ? (
-            <Button label="선택 취소" onPress={() => act('unselect')} />
+            <Button label="<- 선택 취소" onPress={() => act('unselect')} />
           ) : (
             <>
               {bucket === 'unseen' && (
@@ -504,10 +541,23 @@ export default function CampusApp() {
     notices
       .filter((notice) => {
         const detail = details[notice.id];
-        return recruitmentEnded(
-          notice.title,
-          detail?.analysisFresh ? (detail.analysis?.data.events ?? []) : [],
-          now,
+        const currentEvents = detail?.analysisFresh
+          ? (detail.analysis?.data.events ?? [])
+          : [];
+        return (
+          gatheringEnded(
+            notice.title,
+            detail?.raw.publishedDate ?? null,
+            now,
+            detail?.raw.bodyText,
+          ) ||
+          recruitmentEnded(notice.title, currentEvents, now) ||
+          attendanceFollowUpEnded(
+            notice.title,
+            currentEvents,
+            now,
+            detail?.raw.bodyText,
+          )
         );
       })
       .map(({ id }) => id),
@@ -539,41 +589,31 @@ export default function CampusApp() {
     if (selectedDetail?.disposition !== 'saved') return null;
     return (
       <View style={{ gap: 8 }}>
-        <Text style={s.muted}>
-          신청 상태 ·{' '}
-          {selectedDetail.progress === 'applied'
-            ? '신청 완료'
-            : selectedDetail.progress === 'preparing'
-              ? '준비 중'
-              : '관심 저장'}
-        </Text>
         <View style={s.detailActions}>
-          <View style={{ flex: 1 }}>
-            {selectedDetail.progress !== 'preparing' && (
+          {(
+            [
+              { progress: 'saved', label: '관심 저장' },
+              { progress: 'preparing', label: '준비 중' },
+              { progress: 'applied', label: '신청 완료' },
+            ] as const
+          )
+            .filter(
+              ({ progress }) =>
+                progress !== (selectedDetail.progress ?? 'saved'),
+            )
+            .map(({ progress, label }) => (
               <Button
-                label="준비 중으로 변경"
+                key={progress}
+                half
+                label={`${label}으로 변경`}
                 disabled={detailUpdating}
                 onPress={() =>
                   void updateDetail(notice.id, () =>
-                    actions.setProgress(notice.id, 'preparing'),
+                    actions.setProgress(notice.id, progress),
                   )
                 }
               />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            {selectedDetail.progress !== 'applied' && (
-              <Button
-                label="신청 완료로 변경"
-                disabled={detailUpdating}
-                onPress={() =>
-                  void updateDetail(notice.id, () =>
-                    actions.setProgress(notice.id, 'applied'),
-                  )
-                }
-              />
-            )}
-          </View>
+            ))}
         </View>
         {detailErrors[notice.id] && (
           <Text accessibilityRole="alert">변경 내용을 저장하지 못했어요.</Text>
@@ -600,49 +640,21 @@ export default function CampusApp() {
               가상 예시 공지입니다. 실제 원문 링크는 연결되어 있지 않습니다.
             </Text>
           )}
-          <Text style={s.reason}>
-            {eligibilityLabels[eligibility[notice.id]!.result]} ·{' '}
-            {eligibility[notice.id]!.reasons.join(' ')}
-          </Text>
+          {eligibility[notice.id]!.result !== 'needs_review' && (
+            <Text style={s.reason}>
+              {eligibilityLabels[eligibility[notice.id]!.result]}
+            </Text>
+          )}
           {!notice.synthetic && selectedDetail && (
             <>
-              <View style={s.detailActions}>
-                <Button
-                  half
-                  label="공지 원문 열기"
-                  onPress={() => {
-                    void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
-                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                    );
-                  }}
-                />
-                <Button
-                  half
-                  label="분석 다시 시도"
-                  onPress={() => {
-                    void analyzeNotice(notice.id).catch(() =>
-                      setDetailErrors((old) => ({ ...old, [notice.id]: true })),
-                    );
-                  }}
-                />
-              </View>
-              {detailReviewNotes(
-                selectedDetail.analysisFresh
-                  ? (selectedDetail.analysis?.data.review_notes ?? [])
-                  : [],
-                selectedDetail.raw.hasBodyImages ||
-                  selectedDetail.raw.attachments.length > 0,
-              ).map((note) => (
-                <Text key={note} style={s.reason}>
-                  {note}
-                </Text>
-              ))}
               {selectedDetail.analysisFresh &&
-                selectedDetail.analysis?.data.events.map((event, index) => (
-                  <Text key={index} style={s.description}>
-                    {detailEventLabel(event)}
-                  </Text>
-                ))}
+                selectedDetail.analysis?.data.events
+                  .filter((event) => event.status === 'resolved')
+                  .map((event, index) => (
+                    <Text key={index} style={s.description}>
+                      {detailEventLabel(event)}
+                    </Text>
+                  ))}
               {!selectedDetail.analysis && (
                 <Text selectable style={s.description}>
                   {selectedDetail.raw.bodyText}
@@ -660,6 +672,29 @@ export default function CampusApp() {
                 />
               )}
             </>
+          )}
+
+          {!notice.synthetic && selectedDetail && (
+            <View style={s.detailActions}>
+              <Button
+                half
+                label="공지 원문 열기"
+                onPress={() => {
+                  void Linking.openURL(selectedDetail.sourceUrl).catch(() =>
+                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                  );
+                }}
+              />
+              <Button
+                half
+                label="분석 다시 시도"
+                onPress={() => {
+                  void analyzeNotice(notice.id).catch(() =>
+                    setDetailErrors((old) => ({ ...old, [notice.id]: true })),
+                  );
+                }}
+              />
+            </View>
           )}
 
           {selectedDetail?.disposition === 'saved' && (
@@ -1357,6 +1392,7 @@ export default function CampusApp() {
                                     bucket={bucket}
                                     onDragging={onCardDragging}
                                     act={(action) => act(n.id, action)}
+                                    progress={details[n.id]?.progress}
                                     progressContent={renderNoticeProgress(n)}
                                     detailContent={renderNoticeDetails(n)}
                                   />
@@ -1800,6 +1836,10 @@ const s = StyleSheet.create({
     flexShrink: 1,
   },
   section: { color: '#213e32', fontSize: 17, fontWeight: '700' },
+  noticeStatusTags: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  progressInterested: { backgroundColor: '#e8eef9', color: '#345b96' },
+  progressPreparing: { backgroundColor: '#fff0cf', color: '#855800' },
+  progressApplied: { backgroundColor: '#dcf2e6', color: '#226346' },
   tag: {
     color: '#56713f',
     fontSize: 10,

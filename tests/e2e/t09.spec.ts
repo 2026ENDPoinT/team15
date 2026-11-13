@@ -90,7 +90,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
     .getByRole('button', { name: '준비 중으로 변경', exact: true })
     .click();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
   await button('1학년').click();
@@ -99,9 +99,12 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   ).toBeVisible();
   await openSaved();
   await expect(
-    page.getByText('지원 조건 불일치 · 학년 조건이 입력한 프로필과 달라요.', {
-      exact: true,
-    }),
+    page
+      .getByTestId('active-page')
+      .getByTestId(/^notice-detail-/)
+      .getByText('지원 조건 불일치', {
+        exact: true,
+      }),
   ).toBeVisible();
   await expect(checkedItem).toBeChecked();
   await page.getByRole('tab', { name: '설정', exact: true }).click();
@@ -135,7 +138,7 @@ test('T09 가상 HTML 변경·AI 실패·복구 뒤 변경 표시와 사용자 �
   await openSaved();
   await expect(checkedItem).toBeChecked();
   await expect(
-    page.getByText('신청 상태 · 준비 중', { exact: true }),
+    page.getByTestId('active-page').getByText('준비 중', { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText('신청 마감 · 2026-11-23 18:00', { exact: true }),
