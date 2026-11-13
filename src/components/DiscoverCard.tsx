@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { runOnJS, withTiming } from 'react-native-reanimated';
+import { useCardMotion } from './gestureMotion';
+import { useCardTouchLock } from './useCardTouchLock';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Animated,
-  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -25,56 +27,34 @@ export default function DiscoverCard({
   act: (action: Action) => Promise<boolean>;
   onDragging: (dragging: boolean) => void;
 }) {
+  const touchLock = useCardTouchLock(onDragging);
   const { width, height } = useWindowDimensions();
-  const position = useRef(new Animated.ValueXY({ x: 0, y: 60 })).current;
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const mounted = useRef(true);
-  const axis = useRef<'x' | 'y' | null>(null);
   const actRef = useRef(act);
   actRef.current = act;
 
-  useEffect(() => {
-    mounted.current = true;
-    Animated.timing(position, {
-      toValue: { x: 0, y: 0 },
-      duration: 240,
-      useNativeDriver: true,
-    }).start();
-    return () => {
+  useEffect(
+    () => () => {
       mounted.current = false;
-      position.stopAnimation();
-      onDragging(false);
-    };
-  }, [position, onDragging]);
-
+    },
+    [],
+  );
   const reset = () => {
-    axis.current = null;
-    onDragging(false);
-    Animated.spring(position, {
-      toValue: { x: 0, y: 0 },
-      useNativeDriver: true,
-      friction: 8,
-    }).start();
+    motion.reset();
+    touchLock.release();
   };
   const perform = (action: Action, verticalDirection = -1) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
-    onDragging(true);
-    Animated.timing(position, {
-      toValue: {
-        x: action === 'hold' ? 0 : action === 'select' ? width : -width,
-        y: action === 'hold' ? height * verticalDirection : 0,
-      },
-      duration: 180,
-      useNativeDriver: true,
-    }).start(async ({ finished }) => {
-      if (!finished || !mounted.current) return;
-      // The repository determines whether to advance. Failed writes keep this card.
+    touchLock.startDrag();
+    const complete = async (finished: boolean) => {
+      if (!mounted.current) return;
       try {
-        await actRef.current(action);
+        if (finished) await actRef.current(action);
       } finally {
         if (mounted.current) {
           busyRef.current = false;
@@ -82,111 +62,98 @@ export default function DiscoverCard({
           reset();
         }
       }
-    });
+    };
+    motion.x.value = withTiming(
+      action === 'hold' ? 0 : action === 'select' ? width : -width,
+      { duration: 180 },
+    );
+    motion.y.value = withTiming(
+      action === 'hold' ? height * verticalDirection : 0,
+      { duration: 180 },
+      (finished) => {
+        runOnJS(complete)(!!finished);
+      },
+    );
   };
-  const performRef = useRef(perform);
-  performRef.current = perform;
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_, g) =>
-          !expanded &&
-          !busyRef.current &&
-          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
-        onMoveShouldSetPanResponder: (_, g) =>
-          !expanded &&
-          !busyRef.current &&
-          (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8),
-        onPanResponderGrant: () => {
-          position.stopAnimation();
-          axis.current = null;
-          onDragging(true);
-        },
-        onPanResponderMove: (_, g) => {
-          if (!axis.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) >= 16) {
-            axis.current = Math.abs(g.dx) > Math.abs(g.dy) * 1.5 ? 'x' : 'y';
-          }
-          position.setValue({
-            x: axis.current === 'x' ? g.dx : 0,
-            y: axis.current === 'y' ? g.dy : 0,
-          });
-        },
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderTerminate: reset,
-        onPanResponderRelease: (_, g) => {
-          if (axis.current === 'x' && Math.abs(g.dx) >= 56) {
-            performRef.current(g.dx > 0 ? 'select' : 'discard');
-          } else if (axis.current === 'y' && Math.abs(g.dy) >= 48) {
-            performRef.current('hold', g.dy > 0 ? 1 : -1);
-          } else reset();
-        },
-      }),
-    [expanded, position, onDragging],
+  const motion = useCardMotion(
+    !expanded && !busy,
+    touchLock.startDrag,
+    (dx, dy) => {
+      if (Math.abs(dx) >= 56) perform(dx > 0 ? 'select' : 'discard');
+      else if (Math.abs(dy) >= 48) perform('hold', dy > 0 ? 1 : -1);
+      else reset();
+    },
+    reset,
   );
-
+  useEffect(() => {
+    mounted.current = true;
+    motion.y.value = 60;
+    motion.y.value = withTiming(0, { duration: 240 });
+  }, []);
   return (
-    <Animated.View
-      testID="discover-card"
-      pointerEvents={busy ? 'none' : 'auto'}
-      style={[styles.card, { transform: position.getTranslateTransform() }]}
-      {...responder.panHandlers}
-    >
-      <View testID="discover-card-body" style={styles.bodyContent}>
-        <Text style={styles.muted}>{notice.org}</Text>
-        <Text accessibilityRole="header" style={styles.title}>
-          {notice.title}
-        </Text>
-        <Text style={styles.muted}>
-          {notice.synthetic
-            ? '가상 예시'
-            : `실제 공지 · ${notice.analysisLabel}`}
-        </Text>
-        <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
-        <Text style={styles.summary}>{notice.summary}</Text>
-        <Text style={styles.muted}>{eligibilityLabel}</Text>
-        <Text style={styles.muted}>
-          {notice.date
-            ? `${notice.date} · ${notice.time ? `${notice.time} KST` : '시각 미확인'} 마감`
-            : '정확한 일정은 원문에서 확인'}
-        </Text>
-        {expanded && detailContent}
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        aria-expanded={expanded}
-        onPress={() => {
-          setExpanded((old) => !old);
-        }}
-        style={styles.detailToggle}
+    <GestureDetector gesture={motion.gesture}>
+      <Reanimated.View
+        testID="discover-card"
+        pointerEvents={busy ? 'none' : 'auto'}
+        style={[styles.card, motion.style]}
       >
-        <Text style={styles.link}>
-          {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
-        </Text>
-      </Pressable>
-      <View style={styles.actions}>
-        {(
-          [
-            ['discard', '← 버리기'],
-            ['hold', '↕ 보류'],
-            ['select', '선택 →'],
-          ] as const
-        ).map(([action, label]) => (
-          <Pressable
-            key={action}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            disabled={busy}
-            onPress={() => perform(action)}
-            style={[styles.button, action === 'select' && styles.primary]}
-          >
-            <Text style={[styles.link, action === 'select' && styles.light]}>
-              {label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </Animated.View>
+        <View testID="discover-card-body" style={styles.bodyContent}>
+          <Text style={styles.muted}>{notice.org}</Text>
+          <Text accessibilityRole="header" style={styles.title}>
+            {notice.title}
+          </Text>
+          <Text style={styles.muted}>
+            {notice.synthetic
+              ? '가상 예시'
+              : '실제 공지 · ' + notice.analysisLabel}
+          </Text>
+          <Text style={styles.tags}>{notice.tags.join(' · ')}</Text>
+          <Text style={styles.summary}>{notice.summary}</Text>
+          <Text style={styles.muted}>{eligibilityLabel}</Text>
+          <Text style={styles.muted}>
+            {notice.date
+              ? `${notice.date} · ${notice.time ? notice.time + ' KST' : '시각 미확인'} 마감`
+              : '정확한 일정은 원문에서 확인'}
+          </Text>
+          {expanded && detailContent}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          aria-expanded={expanded}
+          onPress={() => {
+            setExpanded((old) => !old);
+          }}
+          style={styles.detailToggle}
+        >
+          <Text style={styles.link}>
+            {expanded ? '접어 두기 ↑' : '공지 자세히 보기 ↗'}
+          </Text>
+        </Pressable>
+        <View style={styles.actions}>
+          {(
+            [
+              ['discard', '← 버리기'],
+              ['hold', '↕ 보류'],
+              ['select', '선택 →'],
+            ] as const
+          ).map(([action, label]) => (
+            <Pressable
+              key={action}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              disabled={busy}
+              onPress={() => perform(action)}
+              style={[styles.button, action === 'select' && styles.primary]}
+            >
+              <Text style={[styles.link, action === 'select' && styles.light]}>
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Reanimated.View>
+    </GestureDetector>
   );
 }
 
