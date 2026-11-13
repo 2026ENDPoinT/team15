@@ -19,6 +19,7 @@ import {
   sha256,
 } from './http';
 import type { RequestLog, WorkerDependencies, WorkerEnv } from './types';
+import { enrichPilotHwpx } from './seoultechHwpx';
 
 async function authenticate(
   request: Request,
@@ -146,9 +147,14 @@ export function createWorker(overrides: Partial<WorkerDependencies> = {}) {
         log.notice_id = input.notice_id.slice(0, 200);
         if ((await hashNoticeContent(input, sha256)) !== input.content_hash)
           throw new ApiFailure('INVALID_INPUT');
+        const analysisInput = await enrichPilotHwpx(
+          input,
+          env.HWPX_PILOT_NOTICE_ID,
+          deps.fetch,
+        );
         let result: Awaited<ReturnType<typeof generateAnalysis>>;
         if (env.ANALYSIS_CACHE) {
-          const key = await analysisCacheKey(input, env.GEMINI_MODEL);
+          const key = await analysisCacheKey(analysisInput, env.GEMINI_MODEL);
           // Worker placement does not place Durable Objects. Avoid the HKG
           // provider-location failure previously observed by this project.
           const namespace =
@@ -158,7 +164,7 @@ export function createWorker(overrides: Partial<WorkerDependencies> = {}) {
           const cached = await namespace.get(namespace.idFromName(key)).fetch(
             new Request('https://analysis-cache.internal/', {
               method: 'POST',
-              body: JSON.stringify({ input, tokenId }),
+              body: JSON.stringify({ input: analysisInput, tokenId }),
             }),
           );
           if (!cached.ok) {
@@ -179,11 +185,15 @@ export function createWorker(overrides: Partial<WorkerDependencies> = {}) {
           result = (await cached.json()) as typeof result;
         } else {
           // Binding-free unit tests and explicitly unconfigured local Workers.
-          result = await generateAnalysis(input, tokenId, env, deps);
+          result = await generateAnalysis(analysisInput, tokenId, env, deps);
         }
         log.total_tokens = result.totalTokens;
         const envelope = analysisEnvelopeSchema.parse(result.envelope);
-        response = jsonResponse(envelope);
+        // The public response correlates to the app request. The Worker cache uses the enriched hash.
+        response = jsonResponse({
+          ...envelope,
+          content_hash: input.content_hash,
+        });
       } catch (error) {
         const failure =
           error instanceof ApiFailure

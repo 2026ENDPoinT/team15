@@ -3,7 +3,12 @@ import { contentHashSchema, type AnalyzeNoticeRequest } from './contracts';
 export const CANONICALIZATION_VERSION = 'c1';
 export type NoticeContent = Pick<
   AnalyzeNoticeRequest,
-  'title' | 'body_text' | 'extracted_links' | 'attachments' | 'has_body_images'
+  | 'title'
+  | 'body_text'
+  | 'extracted_links'
+  | 'attachments'
+  | 'has_body_images'
+  | 'attachment_texts'
 >;
 
 // HTML entity 해석과 태그 제거는 수집 어댑터에서 먼저 수행한다.
@@ -49,6 +54,26 @@ export function canonicalizeNoticeContent(content: NoticeContent): string {
       })),
     ),
     has_body_images: content.has_body_images,
+    ...(content.attachment_texts?.length
+      ? {
+          attachment_texts: sortUnique(
+            content.attachment_texts.map(
+              ({ attachment_index, sha256, text }) => {
+                const attachment = content.attachments[attachment_index]!;
+                return {
+                  name: normalizeText(attachment.name),
+                  url:
+                    attachment.url === null
+                      ? null
+                      : normalizeUrl(attachment.url),
+                  sha256,
+                  text: normalizeText(text),
+                };
+              },
+            ),
+          ),
+        }
+      : {}),
   });
 }
 

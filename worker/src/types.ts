@@ -10,6 +10,7 @@ export interface WorkerEnv {
   DEMO_TOKEN_SHA256: string;
   DEMO_TOKEN_EXPIRES_AT: string;
   ANALYSIS_ENABLED: string;
+  HWPX_PILOT_NOTICE_ID?: string;
   ANALYSIS_CACHE_JURISDICTION?: 'eu' | 'local';
   ANALYSIS_CACHE?: AnalysisCacheNamespace;
   ANALYZE_RATE_LIMITER: {
