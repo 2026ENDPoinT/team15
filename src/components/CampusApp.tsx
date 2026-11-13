@@ -299,6 +299,16 @@ export default function CampusApp() {
     saveProfile,
   } = useDemoNotice();
   const changing = useRef(false);
+  const changingNotices = useRef(new Set<string>());
+  const [pendingNoticeIds, setPendingNoticeIds] = useState<string[]>([]);
+  // Keep processed cards out of the queue until a repository snapshot confirms
+  // their new bucket. A background reload can supersede the action's reload.
+  useEffect(() => {
+    setPendingNoticeIds((old) => {
+      const next = old.filter((id) => buckets[id] === 'unseen');
+      return next.length === old.length ? old : next;
+    });
+  }, [buckets]);
   const [deferredNoticeIds, setDeferredNoticeIds] = useState<string[]>([]);
   const [draft, setDraft] = useState(profile.keywords);
   const [options] = useState([
@@ -502,16 +512,20 @@ export default function CampusApp() {
       restore: actions.restoreNotice,
       unselect: actions.unsaveNotice,
     }[action as 'delete' | 'discard' | 'select' | 'restore' | 'unselect'];
-    if (!write || changing.current) return false;
-    changing.current = true;
+    if (!write || changingNotices.current.has(id)) return false;
+    changingNotices.current.add(id);
+    if (action === 'select' || action === 'discard') {
+      setPendingNoticeIds((old) => [...old, id]);
+    }
     try {
       await write(id);
       setDeferredNoticeIds((old) => old.filter((entry) => entry !== id));
     } catch {
+      setPendingNoticeIds((old) => old.filter((entry) => entry !== id));
       setMessage('공지 상태를 저장하지 못했어요. 다시 시도해 주세요.');
       return false;
     } finally {
-      changing.current = false;
+      changingNotices.current.delete(id);
     }
     setMessage(
       (
@@ -851,6 +865,7 @@ export default function CampusApp() {
                           notificationSnapshot,
                           refreshReminders,
                           deferredNoticeIds,
+                          pendingNoticeIds,
                           profile,
                           page === 1 ? showAll : null,
                           minute,
@@ -880,6 +895,7 @@ export default function CampusApp() {
                     let visible = notices.filter((notice) => {
                       if (
                         buckets[notice.id] !== bucket ||
+                        (page === 1 && pendingNoticeIds.includes(notice.id)) ||
                         ((page === 1 || page === 2) &&
                           endedNoticeIds.has(notice.id))
                       )
