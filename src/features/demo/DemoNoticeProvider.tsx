@@ -1,36 +1,143 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useState,
   type PropsWithChildren,
 } from 'react';
-import type { NoticeActions } from '../../../shared/contracts';
+import {
+  CryptoDigestAlgorithm,
+  digestStringAsync,
+  randomUUID,
+} from 'expo-crypto';
+import { openDatabaseAsync } from 'expo-sqlite';
+import { Text } from 'react-native';
+import { normalNoticeFixture } from '../../../fixtures/synthetic/notices';
+import { ActionButton, Screen, styles } from '../../components/ui';
+import { createNoticeRepository } from '../../db/noticeRepository';
+import { createNoticeActions } from '../../services/noticeActions';
 import { demoNotice } from './demoNotice';
 
-type DemoNoticeState = {
+async function openDemoRepository() {
+  const db = await openDatabaseAsync('campus-notices.db');
+  try {
+    const repository = await createNoticeRepository(
+      {
+        execAsync: (sql) => db.execAsync(sql),
+        runAsync: (sql, params) => db.runAsync(sql, params),
+        getFirstAsync: (sql, params = []) => db.getFirstAsync(sql, params),
+        getAllAsync: (sql, params = []) => db.getAllAsync(sql, params),
+        withTransactionAsync: (task) => db.withTransactionAsync(task),
+      },
+      {
+        randomUUID,
+        sha256: (text) => digestStringAsync(CryptoDigestAlgorithm.SHA256, text),
+      },
+    );
+    const { notice, analysis } = normalNoticeFixture;
+    if (!(await repository.getNoticeDetail(notice.id))) {
+      await repository.upsertRawNotice(notice);
+      await repository.applyAnalysis(analysis);
+      await repository.saveNotice(notice.id);
+    }
+    return repository;
+  } catch (error) {
+    await db.closeAsync();
+    throw error;
+  }
+}
+
+type Repository = Awaited<ReturnType<typeof openDemoRepository>>;
+let opening: Promise<Repository> | undefined;
+function getRepository() {
+  return (opening ??= openDemoRepository().catch((error) => {
+    opening = undefined;
+    throw error;
+  }));
+}
+
+async function readState(repository: Repository) {
+  const home = await repository.getHomeModel();
+  const checklist = await repository.getChecklist(demoNotice.id);
+  return {
+    home,
+    checklist,
+    saved: home.notices.some(({ id }) => id === demoNotice.id),
+  };
+}
+
+type DemoNoticeState = Awaited<ReturnType<typeof readState>> & {
   notice: typeof demoNotice;
-  saved: boolean;
-  actions: Pick<NoticeActions, 'saveNotice' | 'unsaveNotice'>;
+  actions: Pick<
+    ReturnType<typeof createNoticeActions>,
+    'saveNotice' | 'unsaveNotice' | 'setProgress' | 'setChecklistCompleted'
+  >;
 };
 
 const DemoNoticeContext = createContext<DemoNoticeState | null>(null);
 
 export function DemoNoticeProvider({ children }: PropsWithChildren) {
-  // 두 탭에서 같은 공지를 바로 확인할 수 있게 관심 저장된 샘플로 시작한다.
-  // T03의 SQLite 구현 전까지 현재 실행 중에만 상태를 공유한다.
-  const [saved, setSaved] = useState(true);
+  const [state, setState] = useState<Awaited<ReturnType<typeof readState>>>();
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void getRepository()
+      .then(readState)
+      .then(
+        (result) => {
+          if (active) setState(result);
+        },
+        () => {
+          if (active) setFailed(true);
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+
+  if (!state) {
+    return (
+      <Screen>
+        <Text style={styles.body}>
+          {failed
+            ? '저장한 공지를 불러오지 못했어요.'
+            : '저장한 공지를 불러오는 중이에요.'}
+        </Text>
+        {failed && (
+          <ActionButton
+            label="다시 시도"
+            onPress={() => {
+              setFailed(false);
+              setAttempt(attempt + 1);
+            }}
+          />
+        )}
+      </Screen>
+    );
+  }
+
+  async function update(
+    write: (actions: ReturnType<typeof createNoticeActions>) => Promise<void>,
+  ) {
+    const repository = await getRepository();
+    await write(createNoticeActions(repository));
+    setState(await readState(repository));
+  }
+
   const actions: DemoNoticeState['actions'] = {
-    async saveNotice(noticeId) {
-      if (noticeId !== demoNotice.id) throw new Error('Unknown demo notice');
-      setSaved(true);
-    },
-    async unsaveNotice(noticeId) {
-      if (noticeId !== demoNotice.id) throw new Error('Unknown demo notice');
-      setSaved(false);
-    },
+    saveNotice: (id) => update((actions) => actions.saveNotice(id)),
+    unsaveNotice: (id) => update((actions) => actions.unsaveNotice(id)),
+    setProgress: (id, progress) =>
+      update((actions) => actions.setProgress(id, progress)),
+    setChecklistCompleted: (id, completed) =>
+      update((actions) => actions.setChecklistCompleted(id, completed)),
   };
   return (
-    <DemoNoticeContext.Provider value={{ notice: demoNotice, saved, actions }}>
+    <DemoNoticeContext.Provider
+      value={{ notice: demoNotice, ...state, actions }}
+    >
       {children}
     </DemoNoticeContext.Provider>
   );

@@ -4,6 +4,7 @@
 - 기준: 구현 설계안 2·6·12.2·13절
 - 작업 브랜치: `feat/t02-notice-collection`
 - 메인 반영 기준: `e7d8d28` (`Upgrade Expo to SDK 58`). 공통 패키지는 main과 같은 Expo 58.0.25·React Native 0.88.1·React 19.3.0·TypeScript 6.0.3을 사용하며, T02의 `expo-crypto`는 SDK 58 호환 버전 58.0.8을 사용한다. HTML 파서 의존성과 수집 검증 명령은 유지한다.
+- 후속 main 병합: `93f6194`의 SQLite 저장·진행 상태·체크리스트 연결을 유지하고 T02 수집 코드를 함께 포함한다. `expo-crypto` 선언은 main의 `~58.0.8`을 따르며 실제 설치 버전은 lockfile로 고정한다.
 - 상태: **T02 완료**. 구현·자동 검증에 이어 2026-11-13 사용자가 Android 실기기 검증 항목 모두 확인 완료를 보고했다.
 
 ## 1 구현 범위
@@ -106,3 +107,11 @@ Node는 `.nvmrc`의 24.22.3을 사용한다. `collect:smoke`만 외부 게시판
 7. 기기 모델·Android·Expo Go 버전·확인 일시·성공 화면을 기록한다.
 
 웹 fixture 테스트와 Android 번들 결과는 실기기 결과와 구분한다. 이번 T02의 실기기 완료 판정은 위 사용자 확인에 근거한다.
+
+## 6 main 병합 충돌 해결
+
+README는 SQLite 제품 상태와 T02의 별도 실제 수집을 함께 설명한다. `package.json`은 main의 Metro runtime·SQLite 의존성과 T02의 파서·해시 의존성·검증 스크립트를 보존하고 lockfile을 재생성한다. TypeScript 검사는 T02 CLI가 있는 `scripts/**/*.ts`도 포함한다.
+
+병합 검증: Node.js 24.22.3에서 `npm run check`의 타입·포맷 검사와 테스트 47개, `npm run test:e2e`의 웹 UI 테스트 3개, `npm run build:android`가 통과했다. 웹 UI 테스트는 SQLite 체크·신청 상태와 관심 해제의 새로고침 후 보존, T02 실제 HTML 파싱·해시·실패 표시를 함께 확인한다.
+
+기존 T02 실기기 확인은 병합 전 수집 검증 결과다. 새 SQLite 저장 흐름의 Android 재실행·보존 검증은 별도로 수행해야 한다. 실제 수집 결과의 DB·화면 통합은 T07 범위로 남긴다.

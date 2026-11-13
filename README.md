@@ -6,12 +6,12 @@ ENDPoinT 해커톤 2026 Team 15
 
 ## 1 현재 구현 범위
 
-T01의 Expo 앱 뼈대와 역할 C의 공통 계약·가상 샘플, T02의 두 게시판 수집 어댑터를 구현했다. 홈·공지 찾기·상세는 아직 가상 공지를 표시하며 관심 저장 상태를 공유한다. 실제 수집은 별도의 개발 검증 화면과 CLI에서 실행한다. **Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. SQLite 영속 저장, AI Worker, 알림과 실제 공지의 제품 화면 연결은 아직 구현하지 않았다.
+T01의 Expo 앱 뼈대, T02의 두 게시판 수집 어댑터와 main의 SQLite 저장 기능을 연결했다. 홈·공지 찾기·상세는 가상 공지를 표시하며 관심 저장·해제, 신청 상태, 준비물 체크를 SQLite에 보관한다. 실제 수집은 별도의 개발 검증 화면과 CLI에서 실행한다. **T02 수집의 Android 실기기 검증은 2026-11-13 사용자 확인으로 완료**했다. 새로 병합한 SQLite 저장 흐름의 Android 실기기 검증은 별도로 필요하다. AI Worker, 실제 공지의 제품 화면 연결과 기기 알림 연결은 아직 구현하지 않았다.
 
 | 경로                     | 내용                                               |
 | ------------------------ | -------------------------------------------------- |
 | `app/`                   | Expo Router 홈·찾기 탭과 공통 상세                 |
-| `src/features/demo/`     | 가상 공지 읽기 모델과 메모리 상태 공유             |
+| `src/features/demo/`     | 가상 공지 읽기 모델과 SQLite 상태 연결             |
 | `src/components/`        | 공통 카드·버튼·화면 구성                           |
 | `shared/contracts.ts`    | Zod 스키마, 추론 타입, 공통 사용자 동작 인터페이스 |
 | `shared/canonicalize.ts` | 정규화 c1, 플랫폼 SHA-256 함수 주입                |
@@ -38,7 +38,7 @@ npm ci
 npm run start
 ```
 
-SDK 58을 지원하는 Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 기존 SDK 57 작업 환경에서는 `npm ci` 후 `npm run start -- --clear`로 Metro 캐시를 초기화한다. SDK 버전이 맞지 않으면 [Expo Go 다운로드](https://expo.dev/go)에서 SDK 58용 앱을 확인한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 저장·해제는 현재 실행 중에만 유지된다.
+SDK 58을 지원하는 Android Expo Go에서 QR을 열어 실행한다. PC와 같은 네트워크를 사용한다. 기존 SDK 57 작업 환경에서는 `npm ci` 후 `npm run start -- --clear`로 Metro 캐시를 초기화한다. SDK 버전이 맞지 않으면 [Expo Go 다운로드](https://expo.dev/go)에서 SDK 58용 앱을 확인한다. 에뮬레이터가 준비되어 있으면 `npm run android`, 브라우저에서 보조 확인하려면 `npm run web`을 사용한다. 첫 실행은 가상 공지 한 건을 관심 저장한 상태다. 관심 저장·해제, 신청 상태와 체크 기록은 SQLite에 저장하며, 브라우저 새로고침 후에도 유지된다.
 
 ```sh
 npm run typecheck

@@ -22,6 +22,7 @@
     "collect:smoke": "node --import tsx scripts/collect_smoke.ts"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~58.0.17",
     "@expo/vector-icons": "15.1.1",
     "css-select": "7.0.0",
     "domhandler": "6.0.1",
@@ -29,10 +30,11 @@
     "esbuild": "^0.28.2",
     "expo": "58.0.25",
     "expo-constants": "58.0.16",
-    "expo-crypto": "58.0.8",
+    "expo-crypto": "~58.0.8",
     "expo-font": "58.0.12",
     "expo-linking": "58.0.17",
     "expo-router": "58.0.31",
+    "expo-sqlite": "~58.0.17",
     "expo-status-bar": "58.0.5",
     "htmlparser2": "12.0.0",
     "react": "19.3.0",

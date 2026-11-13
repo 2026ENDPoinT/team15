@@ -11,7 +11,8 @@ import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function NoticeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { notice, saved, actions } = useDemoNotice();
+  const { notice, saved, actions, checklist, home } = useDemoNotice();
+  const progress = home.notices.find((item) => item.id === id)?.progress;
   const goBack = () =>
     router.canGoBack() ? router.back() : router.replace('/');
   if (id !== notice.id)
@@ -68,15 +69,53 @@ export default function NoticeDetailScreen() {
       </View>
       <View style={styles.panel}>
         <SectionTitle title="준비할 것" />
-        {notice.checklist.map((item) => (
-          <Text key={item.text} style={styles.body}>
-            • {item.text}
-          </Text>
-        ))}
+        {saved
+          ? checklist.items.map((item) => (
+              <ActionButton
+                key={item.id}
+                label={`${item.completed ? '체크됨' : '체크하기'} · ${item.text}`}
+                secondary
+                onPress={() =>
+                  actions.setChecklistCompleted(item.id, !item.completed)
+                }
+              />
+            ))
+          : notice.checklist.map((item) => (
+              <Text key={item.text} style={styles.body}>
+                • {item.text}
+              </Text>
+            ))}
         <Text style={styles.caption}>
-          지금은 준비물 목록을 미리 볼 수 있어요. 체크 기능은 준비 중입니다.
+          {saved
+            ? '항목을 눌러 준비 여부를 기록하세요.'
+            : '관심 저장하면 준비 여부를 기록할 수 있어요.'}
         </Text>
       </View>
+      {progress && (
+        <View style={styles.panel}>
+          <SectionTitle title="신청 상태" />
+          <Text style={styles.body}>
+            {progress === 'applied'
+              ? '신청 완료'
+              : progress === 'preparing'
+                ? '준비 중'
+                : '관심 저장'}
+          </Text>
+          {progress !== 'preparing' && (
+            <ActionButton
+              label="준비 중으로 변경"
+              secondary
+              onPress={() => actions.setProgress(notice.id, 'preparing')}
+            />
+          )}
+          {progress !== 'applied' && (
+            <ActionButton
+              label="신청 완료로 변경"
+              onPress={() => actions.setProgress(notice.id, 'applied')}
+            />
+          )}
+        </View>
+      )}
       <ActionButton
         label={saved ? '관심 해제' : '관심 저장'}
         secondary={saved}

@@ -43,7 +43,19 @@ test('같은 공지를 홈·찾기·상세에서 보고 관심 저장 상태를 
 
   await noticeLink.click();
   await expect(page.getByText('어떤 활동인가요?')).toBeVisible();
-  await expect(page.getByText('• 참가 신청서 준비')).toBeVisible();
+  await page
+    .getByRole('button', { name: '체크하기 · 참가 신청서 준비' })
+    .click();
+  await expect(
+    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '준비 중으로 변경' }).click();
+  await expect(page.getByText('준비 중', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: '체크됨 · 참가 신청서 준비' }),
+  ).toBeVisible();
+  await expect(page.getByText('준비 중', { exact: true })).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('detail.png'),
     fullPage: true,
@@ -52,9 +64,8 @@ test('같은 공지를 홈·찾기·상세에서 보고 관심 저장 상태를 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
   await expect(page.getByText('아직 저장한 공지가 없어요')).toBeVisible();
 
-  // T01의 메모리 상태는 실행을 새로 시작하면 초기 샘플로 복원된다.
   await page.reload();
-  await expect(noticeLink).toBeVisible();
+  await expect(page.getByText('아직 저장한 공지가 없어요')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

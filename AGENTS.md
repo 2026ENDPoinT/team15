@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository contains the T01 Expo application scaffold, T02 live collection adapters, planning documentation, shared contracts, synthetic and real HTML fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The AI Worker and SQLite persistence have not been implemented on this branch. T01 basic flows and T02 Android device verification were confirmed complete by the user on 2026-11-13; see the T02 handoff for the scope and evidence.
+This repository contains the T01 Expo application scaffold, T02 live collection adapters, SQLite persistence merged from main, planning documentation, shared contracts, synthetic and real HTML fixtures, and contract/UI tests for Team 15’s ENDPoinT 2026 hackathon campus notice app. The AI Worker and live collection integration into the product screens remain planned. T01 basic flows and T02 Android device verification were confirmed complete by the user on 2026-11-13 before the SQLite merge; that report does not verify the newly merged persistence flow on a device. See the T02 handoff for the scope and evidence.
 
 - `README.md`: team and project identification.
 - `docs/campus_notice_hackathon_plan.md`: product scope, workflows, and delivery checklist.
@@ -12,13 +12,14 @@ This repository contains the T01 Expo application scaffold, T02 live collection 
 - `fixtures/synthetic/`: explicitly fictional notices and API responses.
 - `tests/`: contract and canonicalization tests.
 - `app/`: Expo Router home/discover tabs and shared notice detail.
-- `src/`: shared UI and temporary in-memory demo state.
+- `src/`: shared UI, SQLite-backed demo state, collection, and services.
+- `src/db/`: migrations and B's notice repository.
 - `docs/campus_notice_t01_handoff.md`: app execution, ownership boundaries, and device checks.
 - `src/sources/`: board adapters, HTML cleanup, collection, and smoke verification.
 - `fixtures/real/`: original public HTML responses and capture metadata.
 - `docs/campus_notice_t02_handoff.md`: collection contracts, automated validation, and user-reported device verification.
 
-The AI proxy in `worker/` remains planned. Keep SQL, HTML parsing, and AI SDK calls out of screens; isolate eligibility and date calculations as pure functions. Replace the temporary demo provider with B's repository/service boundary when implementing persistence.
+The AI proxy in `worker/` remains planned. Keep SQL, HTML parsing, and AI SDK calls out of screens; isolate eligibility and date calculations as pure functions. Use B's repository/service boundary for persistence and future collection integration.
 
 ## Build, Test, and Development Commands
 

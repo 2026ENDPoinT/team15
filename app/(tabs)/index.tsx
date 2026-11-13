@@ -12,7 +12,11 @@ import {
 import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function HomeScreen() {
-  const { notice, saved } = useDemoNotice();
+  const {
+    notice,
+    saved,
+    home: { schedule },
+  } = useDemoNotice();
   return (
     <Screen>
       <View style={styles.group}>
@@ -30,9 +34,9 @@ export default function HomeScreen() {
           <View style={styles.group}>
             <SectionTitle title="다가오는 일정" aside="2026년 가상 일정" />
             <View style={styles.panel}>
-              {notice.events.map((event, index) => (
+              {schedule.map((event, index) => (
                 <View
-                  key={event.type}
+                  key={`${event.type}:${index}`}
                   style={[home.eventRow, index > 0 && home.eventDivider]}
                 >
                   <View style={home.dateBox}>
