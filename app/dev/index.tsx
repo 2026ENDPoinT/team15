@@ -5,10 +5,16 @@ import { ActionButton, Screen, styles } from '../../src/components/ui';
 import { useDemoNotice } from '../../src/features/demo/DemoNoticeProvider';
 
 export default function DeveloperToolsScreen() {
-  const { testNotification, reservationStatus, refreshDemoNotice, demoStatus } =
-    useDemoNotice();
+  const {
+    testNotification,
+    reservationStatus,
+    refreshDemoNotice,
+    demoStatus,
+    resetAppData,
+  } = useDemoNotice();
   const running = useRef(false);
   const [message, setMessage] = useState('');
+  const [confirmReset, setConfirmReset] = useState(false);
   async function run(action: () => Promise<string>) {
     if (running.current) return;
     running.current = true;
@@ -97,6 +103,43 @@ export default function DeveloperToolsScreen() {
         <Text accessibilityLiveRegion="polite" style={styles.body}>
           {message}
         </Text>
+      )}
+      {resetAppData && (
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>앱 데이터 초기화</Text>
+          <Text style={styles.caption}>
+            내 정보·키워드, 수집/저장한 공지, 체크리스트·메모, AI 토큰, 예약
+            알림과 T09 검증 데이터를 삭제하고 처음 설정으로 돌아갑니다. OS 알림
+            권한은 유지됩니다.
+          </Text>
+          {confirmReset ? (
+            <>
+              <Text accessibilityRole="alert" style={styles.body}>
+                삭제한 데이터는 복구할 수 없어요. 초기화할까요?
+              </Text>
+              <ActionButton
+                label="모든 데이터 삭제하고 초기화"
+                onPress={() =>
+                  run(async () => {
+                    await resetAppData();
+                    return '';
+                  })
+                }
+              />
+              <ActionButton
+                secondary
+                label="초기화 취소"
+                onPress={() => setConfirmReset(false)}
+              />
+            </>
+          ) : (
+            <ActionButton
+              secondary
+              label="앱 데이터 초기화"
+              onPress={() => setConfirmReset(true)}
+            />
+          )}
+        </View>
       )}
       <ActionButton
         secondary

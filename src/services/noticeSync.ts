@@ -57,6 +57,7 @@ export function createNoticeSync(options: {
   let analysisQueue = Promise.resolve();
   const detailRequests = new Map<string, Promise<void>>();
   let authBlocked = false;
+  let paused = false;
   async function changed() {
     await options.onDataChange?.();
   }
@@ -320,6 +321,28 @@ export function createNoticeSync(options: {
   }
 
   return {
+    async withPaused(work: () => Promise<void>) {
+      if (paused) throw new Error('초기화가 이미 진행 중이에요.');
+      paused = true;
+      try {
+        await Promise.allSettled([
+          refresh,
+          continuation,
+          ...detailRequests.values(),
+        ]);
+        await analysisQueue;
+        await work();
+        authBlocked = false;
+        publish({
+          phase: 'idle',
+          message: null,
+          analysisRetryAt: null,
+          analysisBlocked: false,
+        });
+      } finally {
+        paused = false;
+      }
+    },
     getStatus: () => status,
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -334,6 +357,7 @@ export function createNoticeSync(options: {
     refreshNotices(
       reason: Parameters<NoticeActions['refreshNotices']>[0],
     ): Promise<void> {
+      if (paused) return Promise.resolve();
       if (refresh) return refresh;
       if (continuation) return continuation;
       refresh = runRefresh(reason)
@@ -350,6 +374,7 @@ export function createNoticeSync(options: {
       return refresh;
     },
     analyzePendingNotices(): Promise<void> {
+      if (paused) return Promise.resolve();
       if (refresh) return refresh;
       if (continuation) return continuation;
       if (
@@ -372,6 +397,7 @@ export function createNoticeSync(options: {
       return continuation;
     },
     analyzeNotice(noticeId: string): Promise<void> {
+      if (paused) return Promise.resolve();
       const running = detailRequests.get(noticeId);
       if (running) return running;
       const result = enqueueAnalysis(async () => {

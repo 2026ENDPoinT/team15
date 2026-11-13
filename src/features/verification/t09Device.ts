@@ -1,4 +1,4 @@
-import { openDatabaseAsync } from 'expo-sqlite';
+import { openDatabaseAsync, deleteDatabaseAsync } from 'expo-sqlite';
 import { randomUUID } from 'expo-crypto';
 import {
   t09Html,
@@ -101,6 +101,7 @@ async function openSession() {
     }
     return {
       close: () => db.closeAsync(),
+      closeForReset: () => sync.withPaused(() => db.closeAsync()),
       inspect,
       async run(
         step:
@@ -171,7 +172,34 @@ async function openSession() {
 }
 
 let session: ReturnType<typeof openSession> | undefined;
-export async function t09DeviceStep(
+const pendingSteps = new Set<Promise<unknown>>();
+let resetting = false;
+export async function resetT09Data() {
+  if (!verificationNotifications) return;
+  resetting = true;
+  try {
+    await Promise.allSettled([...pendingSteps]);
+    if (session) {
+      await (await session).closeForReset();
+      session = undefined;
+    }
+    // Ensure the file exists even when this verification tool was never opened.
+    const db = await openDatabaseAsync('t09-verification.db');
+    await db.closeAsync();
+    await deleteDatabaseAsync('t09-verification.db');
+  } finally {
+    resetting = false;
+  }
+}
+export function t09DeviceStep(step: Parameters<typeof runT09Step>[0]) {
+  if (resetting)
+    return Promise.reject(new Error('검증 데이터를 초기화하고 있어요.'));
+  const result = runT09Step(step).finally(() => pendingSteps.delete(result));
+  pendingSteps.add(result);
+  return result;
+}
+
+async function runT09Step(
   step:
     | Parameters<Awaited<ReturnType<typeof openSession>>['run']>[0]
     | 'reopen'

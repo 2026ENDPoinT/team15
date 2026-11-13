@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('이어진 페이지가 손가락을 따라 움직이고 취소·탭 이동·스크롤 초기화를 지원한다', async ({
   page,

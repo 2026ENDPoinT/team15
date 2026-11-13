@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('시연 새로고침이 관심 공지를 첫 카드와 메인에 표시한다', async ({
   page,
@@ -30,7 +30,9 @@ test('시연 새로고침이 관심 공지를 첫 카드와 메인에 표시한�
   await expect(
     card.getByRole('heading', { name: '정보통신대학 장학금 신청 안내' }),
   ).toBeVisible();
-  await expect(page.getByTestId('discover-refresh-area')).toBeVisible();
+  await expect(
+    page.getByTestId('discover-refresh-area').filter({ visible: true }),
+  ).toBeVisible();
   await page.getByRole('tab', { name: '메인', exact: true }).click();
   await expect(
     page.getByRole('heading', {

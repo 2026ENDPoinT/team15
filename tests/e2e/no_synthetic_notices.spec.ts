@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { notices } from '../../src/features/demo/campusNotices';
 
 test('기본 실행에서 가상 카드와 이전 가상 상세 화면을 표시하지 않는다', async ({

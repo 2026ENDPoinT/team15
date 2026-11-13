@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('사용자 키워드만 삭제 모드에서 삭제한다', async ({ page }, testInfo) => {
   await page.goto('/');
@@ -51,12 +51,13 @@ test('소속 단과대학과 내 정보 및 키워드가 새로고침 후에도 
     name: '정보통신대학',
     exact: true,
   });
-  const department = page.getByRole('textbox', { name: '학과', exact: true });
+  const department = page.getByRole('radio', {
+    name: '전자공학과',
+    exact: true,
+  });
   await settings.click();
   await college.click();
-  await department.fill('전자');
-  await department.fill('전자공학');
-  await department.fill('전자공학과');
+  await department.click();
   await page.getByRole('textbox', { name: '직접 키워드 입력' }).fill('멘토링');
   await page.getByRole('button', { name: '키워드 추가', exact: true }).click();
   await expect(
@@ -68,7 +69,7 @@ test('소속 단과대학과 내 정보 및 키워드가 새로고침 후에도 
   await page.reload();
   await settings.click();
   await expect(college).toBeChecked();
-  await expect(department).toHaveValue('전자공학과');
+  await expect(department).toBeChecked();
   await expect(
     page.getByRole('button', { name: '멘토링', exact: true }),
   ).toBeVisible();

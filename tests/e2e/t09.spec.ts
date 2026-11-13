@@ -1,5 +1,5 @@
 import { pullRefresh } from './pull_refresh';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   t09Html,
   t09Envelope,
